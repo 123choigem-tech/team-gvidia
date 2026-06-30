@@ -420,108 +420,122 @@ def _build_pdf(
          if freq_df is not None and not freq_df.empty else [])
     ) or top_region
 
-    sec_order = {s: i for i, s in enumerate(ALL_SECTIONS)}
-    for sec in sorted(sections, key=lambda s: sec_order.get(s, 99)):
+    import datetime as _dt
+    _WD = ["월", "화", "수", "목", "금", "토", "일"]
 
-        if sec == "overview":
-            story += [
-                Paragraph("개요", h2),
-                Paragraph(
-                    f"재난 뉴스(고수온) 발생 빈도로 관심지역을 도출하고, "
-                    f"국가해양위성센터 해수면온도(SST) 자료로 해당 해역의 "
-                    f"고수온 발생·지속·트렌드를 분석함.", kor),
-                Paragraph(
-                    f"뉴스 이벤트 총 <b>{len(news_df):,}건</b> / "
-                    f"해수면온도 2025.7.1~8.31(62일) / 고수온 기준 <b>{threshold}°C</b>.", kor),
-                Spacer(1, 4*mm),
-            ]
+    def _hot28_lbl(p):
+        raw = p.stem.replace("KHOA_SST_L4_Z003_D01_WGS001K_U", "").replace("_HOT28", "")
+        try:
+            d = _dt.date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
+            return f"{d.month}월 {d.day}일 ({_WD[d.weekday()]})"
+        except Exception:
+            return p.stem
 
-        elif sec == "news":
-            if freq_df is not None and not freq_df.empty:
-                story.append(Paragraph("고수온 이벤트 분석결과 (뉴스 크롤링)", h2))
-                story.append(Paragraph(
-                    f"설정 기간 동안 지역별 고수온 재난 발생 횟수(총 {len(news_df):,}건). "
-                    f"{top5} 등 남해안과 제주에 발생이 집중됨.", kor))
-                # 빈도 표
-                show = freq_df.sort_values("count", ascending=False).head(10)
-                tdata = [["순위", "지역", "발생 건수"]]
-                for i, (_, r) in enumerate(show.iterrows(), 1):
-                    tdata.append([str(i), str(r["location"]), str(r["count"])])
-                story.append(_table(tdata, [20*mm, 80*mm, 70*mm]))
-                story.append(Spacer(1, 3*mm))
-                # 관심지역 지도
-                try:
-                    map_png = _make_region_map_png(freq_df)
-                    story.append(Paragraph("관심지역 분포 지도", h2))
-                    story.append(RLImage(str(map_png), width=160*mm, height=110*mm))
-                except Exception:
-                    pass
-                story.append(Spacer(1, 4*mm))
+    from reportlab.platypus import Table as RLTable, TableStyle as RLTableStyle
 
-        elif sec == "consec_map":
-            imgs = sorted(SST_PERS_DIR.glob("SST_MAXCONSEC*.png"))
-            story.append(Paragraph("고수온 지속일수 분석 (2025.7.1~8.31)", h2))
+    # ── 1페이지: 개요 + 관심지역 지도 ─────────────────────────
+    story += [
+        Paragraph("개요", h2),
+        Paragraph(
+            f"재난 뉴스(고수온) 발생 빈도로 관심지역을 도출하고, "
+            f"국가해양위성센터 해수면온도(SST) 자료로 해당 해역의 "
+            f"고수온 발생·지속·트렌드를 분석함.", kor),
+        Paragraph(
+            f"뉴스 이벤트 총 <b>{len(news_df):,}건</b> / "
+            f"해수면온도 2025.7.1~8.31(62일) / 고수온 기준 <b>{threshold}°C</b>.", kor),
+        Spacer(1, 6*mm),
+    ]
+    if freq_df is not None and not freq_df.empty:
+        try:
+            map_png = _make_region_map_png(freq_df)
+            story.append(Paragraph("관심지역 분포 지도 (뉴스 크롤링 기반)", h2))
+            story.append(RLImage(str(map_png), width=170*mm, height=120*mm))
+        except Exception:
+            pass
+
+    # ── 2페이지: 위성 분석 이미지 3개 ─────────────────────────
+    story.append(PageBreak())
+    story.append(Paragraph("위성 SST 공간·시계열 분석 (2025.7.1~8.31)", h2))
+    imgs_consec = sorted(SST_PERS_DIR.glob("SST_MAXCONSEC*.png"))
+    if imgs_consec:
+        story.append(Paragraph("① 고수온 최장 연속 지속일수 분포", h2))
+        story.append(Paragraph(
+            "남해안 연안을 중심으로 28℃ 이상이 여러 날 연속 지속된 해역이 형성됨. "
+            "연속 지속일수가 긴 격자일수록 양식생물 피해 위험이 누적.", kor))
+        story.append(RLImage(str(imgs_consec[0]), width=160*mm, height=70*mm))
+        story.append(Spacer(1, 3*mm))
+    imgs_freq2 = sorted(SST_PERS_DIR.glob("SST_HOTFREQ*.png"))
+    if imgs_freq2:
+        story.append(Paragraph("② 고수온 누적 발생빈도 분포 (2일↑)", h2))
+        story.append(Paragraph(
+            f"남해안·제주 연안에서 고수온 발생 빈도가 높게 누적되며, "
+            f"뉴스 기반 관심지역({top5})과 공간적으로 일치함.", kor))
+        story.append(RLImage(str(imgs_freq2[0]), width=160*mm, height=70*mm))
+        story.append(Spacer(1, 3*mm))
+    imgs_ts = sorted(SST_TS_DIR.glob("SST_daily_mean_*.png")) if SST_TS_DIR.exists() else []
+    if imgs_ts:
+        story.append(Paragraph("③ 일평균 SST 시계열 트렌드", h2))
+        if sst_start is not None:
+            diff = round(sst_end - sst_start, 1)
             story.append(Paragraph(
-                "남해안 연안을 중심으로 28℃ 이상이 여러 날 연속 지속된 해역이 형성됨. "
-                "연속 지속일수가 긴 격자일수록 양식생물 피해 위험이 누적되어 우선 관리 대상.", kor))
-            if imgs:
-                story.append(RLImage(str(imgs[0]), width=160*mm, height=80*mm))
-            story.append(Spacer(1, 4*mm))
+                f"7월 초 평균 {sst_start}℃ → 8월 말 {sst_end}℃ (약 {diff}℃ 상승), "
+                f"격자 평균 최고 {sst_max}℃.", kor))
+        story.append(RLImage(str(imgs_ts[0]), width=160*mm, height=55*mm))
 
-        elif sec == "freq_map":
-            imgs = sorted(SST_PERS_DIR.glob("SST_HOTFREQ*.png"))
-            story.append(Paragraph("고수온 빈도 공간 분석 (2025.7.1~8.31)", h2))
-            story.append(Paragraph(
-                f"남해안·제주 연안에서 고수온 발생 빈도가 높게 누적되며, "
-                f"뉴스 기반 관심지역({top5})과 공간적으로 일치함.", kor))
-            if imgs:
-                story.append(RLImage(str(imgs[0]), width=160*mm, height=80*mm))
-            story.append(Spacer(1, 4*mm))
+    # ── 3페이지: 크롤링 지역 통계 표 (상위 20) + SST 통계 ──────
+    story.append(PageBreak())
+    story.append(Paragraph("고수온 이벤트 발생 지역 통계 (뉴스 크롤링)", h2))
+    if freq_df is not None and not freq_df.empty:
+        story.append(Paragraph(
+            f"설정 기간 지역별 고수온 재난 발생 횟수(총 {len(news_df):,}건). "
+            f"{top5} 등 남해안과 제주에 발생이 집중됨.", kor))
+        story.append(Spacer(1, 3*mm))
+        show = freq_df.sort_values("count", ascending=False).head(20)
+        tdata = [["순위", "지역", "발생 건수"]]
+        for i, (_, r) in enumerate(show.iterrows(), 1):
+            tdata.append([str(i), str(r["location"]), str(int(r["count"]))])
+        story.append(_table(tdata, [20*mm, 100*mm, 50*mm]))
+        story.append(Spacer(1, 6*mm))
+    if not sst_stat_df.empty:
+        story.append(Paragraph("지역별 SST 통계", h2))
+        cols_s = list(sst_stat_df.columns)
+        tdata2 = [cols_s] + [[str(v) for v in row] for row in sst_stat_df.values]
+        story.append(_table(tdata2, [170*mm / len(cols_s)] * len(cols_s)))
 
-        elif sec == "timeseries":
-            imgs = sorted(SST_TS_DIR.glob("SST_daily_mean_*.png")) if SST_TS_DIR.exists() else []
-            story.append(Paragraph("평균 해수면온도 트렌드 (2025.7.1~8.31)", h2))
-            if sst_start is not None:
-                diff = round(sst_end - sst_start, 1)
-                story.append(Paragraph(
-                    f"7월 초 평균 {sst_start}℃에서 8월 말 {sst_end}℃로 약 {diff}℃ 지속 상승, "
-                    f"격자 평균 최고 {sst_max}℃. 여름철 해수면온도의 뚜렷한 상승 추세.", kor))
-            if imgs:
-                story.append(RLImage(str(imgs[0]), width=160*mm, height=55*mm))
-            story.append(Spacer(1, 4*mm))
-
-        elif sec == "sst_stats" and not sst_stat_df.empty:
-            story.append(Paragraph("지역별 SST 통계", h2))
-            cols_s = list(sst_stat_df.columns)
-            tdata  = [cols_s] + [[str(v) for v in row] for row in sst_stat_df.values]
-            story.append(_table(tdata, [170*mm / len(cols_s)] * len(cols_s)))
-            story.append(Spacer(1, 4*mm))
-
-        elif sec == "hotmap":
-            imgs = sorted(SST_HOT_IMG.glob("*.png"))[-3:]
-            if imgs:
-                story.append(Paragraph("일별 고수온 분포 지도 (최근 3일)", h2))
-                for img in imgs:
-                    date_str = img.stem.split("_U")[-1].replace("_HOT28", "")
-                    date_fmt = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
-                    story.append(Paragraph(date_fmt, kor))
-                    story.append(RLImage(str(img), width=160*mm, height=70*mm))
-                story.append(Spacer(1, 4*mm))
-
-        elif sec == "conclusion":
-            story += [
-                Paragraph("결론 및 시사점", h2),
-                Paragraph(
-                    f"뉴스 발생 빈도와 위성 고수온 분석이 남해안·제주에서 공간적으로 일치 "
-                    f"→ 관심지역({top5}) 자동 도출의 타당성을 확인함.", kor),
-                Paragraph(
-                    "고수온 장기 지속 해역과 저염분 중첩 해역을 우선 경계 대상으로 설정하여 "
-                    "양식어가 피해 예방에 선제적으로 대응 가능.", kor),
-                Spacer(1, 3*mm),
-                Paragraph("※ 출처: 한국언론진흥재단·빅카인즈(뉴스 메타데이터), "
-                           "국가해양위성센터 KHOA L4 해수면온도", kor),
-                Spacer(1, 4*mm),
-            ]
+    # ── 4페이지: HOT28 분포 이미지 최근 4장 (2×2) + 결론 ───────
+    story.append(PageBreak())
+    hot_imgs = sorted(SST_HOT_IMG.glob("*.png"))[-4:]
+    if hot_imgs:
+        story.append(Paragraph("일별 고수온(28°C↑) 분포 지도 (최근 4일)", h2))
+        pairs = [hot_imgs[i:i+2] for i in range(0, len(hot_imgs), 2)]
+        for pair in pairs:
+            cells = []
+            for img_p in pair:
+                cells.append([RLImage(str(img_p), width=78*mm, height=52*mm),
+                               Paragraph(_hot28_lbl(img_p), kor)])
+            while len(cells) < 2:
+                cells.append(["", ""])
+            tbl_data = [[cells[0][0], cells[1][0]], [cells[0][1], cells[1][1]]]
+            tbl = RLTable(tbl_data, colWidths=[85*mm, 85*mm])
+            tbl.setStyle(RLTableStyle([
+                ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]))
+            story.append(tbl)
+        story.append(Spacer(1, 6*mm))
+    story += [
+        Paragraph("결론 및 시사점", h2),
+        Paragraph(
+            f"뉴스 발생 빈도와 위성 고수온 분석이 남해안·제주에서 공간적으로 일치 "
+            f"→ 관심지역({top5}) 자동 도출의 타당성을 확인함.", kor),
+        Paragraph(
+            "고수온 장기 지속 해역과 저염분 중첩 해역을 우선 경계 대상으로 설정하여 "
+            "양식어가 피해 예방에 선제적으로 대응 가능.", kor),
+        Spacer(1, 3*mm),
+        Paragraph("※ 출처: 한국언론진흥재단·빅카인즈(뉴스 메타데이터), "
+                  "국가해양위성센터 KHOA L4 해수면온도", kor),
+    ]
 
     doc.build(story)
     buf.seek(0)

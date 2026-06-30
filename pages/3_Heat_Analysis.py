@@ -16,7 +16,7 @@ inject()
 inject_alerts(get_active_alerts())
 
 st.title("🌡️ 해수면온도 분석")
-st.caption("실제 수집된 SST CSV를 바탕으로 지역별 추세와 이미지 결과를 함께 확인합니다.")
+st.caption("실제 수집된 SST CSV를 바탕으로 지역별 추세와 시각자료를 함께 확인합니다.")
 
 DATA_DIR = Path("data")
 DEFAULT_THRESHOLD = 28.0
@@ -138,77 +138,35 @@ with tab2:
         st.info("지역 빈도 파일이 없습니다.")
 
 with tab3:
-    import datetime as _dt
-
     ts_imgs = sorted(TS_DIR.glob("SST_daily_mean_*.png"))
     hot_imgs = sorted(HOT_IMG_DIR.glob("*_HOT28.png"))
-
-    _WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
-
-    def _parse_hot_date(img_path) -> tuple[str, str]:
-        """파일명에서 날짜 추출 → (raw YYYYMMDD, 표시용 문자열)"""
-        raw = img_path.stem.replace("KHOA_SST_L4_Z003_D01_WGS001K_U", "").replace("_HOT28", "")
-        try:
-            d = _dt.date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
-            label = f"{d.month}월 {d.day}일 ({_WEEKDAY_KO[d.weekday()]})"
-        except Exception:
-            label = raw
-        return raw, label
-
     if hot_imgs:
-        hot_meta = [_parse_hot_date(p) for p in hot_imgs]
-        hot_labels = [m[1] for m in hot_meta]
-
-        item1, item2 = st.tabs(["📍 날짜별 고수온 분포 지도", "🗓 전체 날짜 갤러리"])
-
-        with item1:
-            st.markdown(
-                "**28℃ 이상 고수온 구역**이 어느 날짜에 어디에 분포했는지 지도로 확인합니다.  "
-                "슬라이더 또는 이전/다음 버튼으로 날짜를 이동하세요."
-            )
-
-            if "hot_idx" not in st.session_state:
-                st.session_state.hot_idx = len(hot_imgs) - 1  # 최신 날짜 기본
-
-            nav_l, nav_slider, nav_r = st.columns([1, 8, 1])
-            with nav_l:
-                if st.button("◀ 이전", use_container_width=True) and st.session_state.hot_idx > 0:
-                    st.session_state.hot_idx -= 1
-            with nav_r:
-                if st.button("다음 ▶", use_container_width=True) and st.session_state.hot_idx < len(hot_imgs) - 1:
-                    st.session_state.hot_idx += 1
-            with nav_slider:
-                st.session_state.hot_idx = st.select_slider(
-                    "날짜 선택",
-                    options=list(range(len(hot_imgs))),
-                    value=st.session_state.hot_idx,
-                    format_func=lambda i: hot_labels[i],
-                    label_visibility="collapsed",
-                )
-
-            idx = st.session_state.hot_idx
-            chosen_label = hot_labels[idx]
-            chosen_path = hot_imgs[idx]
-
-            st.markdown(f"### {chosen_label} — 28℃ 이상 고수온 분포")
-            st.caption(f"총 {len(hot_imgs)}개 날짜 중 {idx + 1}번째 · 파일: `{chosen_path.name}`")
-            _, img_col, _ = st.columns([1, 6, 1])
-            with img_col:
-                st.image(str(chosen_path), use_container_width=True)
-
-        with item2:
-            st.markdown("수집된 **모든 날짜**의 고수온 분포 지도를 한눈에 봅니다.")
-            gallery_cols = st.columns(4)
-            for g_idx, (path, (_, label)) in enumerate(zip(hot_imgs, hot_meta)):
-                with gallery_cols[g_idx % 4]:
-                    st.image(str(path), caption=label, use_container_width=True)
-
+        hot_dates = [img.stem.rsplit("_", 1)[0].replace("KHOA_SST_L4_Z003_D01_WGS001K_U", "") for img in hot_imgs]
+        hot_pick = st.select_slider("날짜", options=list(range(len(hot_imgs))), format_func=lambda i: hot_dates[i])
     else:
-        st.info("고수온 분포 지도 이미지가 없습니다. (`data/sst/hot/img/` 폴더를 확인하세요.)")
+        hot_pick = None
+        st.info("고수온 분석 지도가 없습니다.")
 
-    if ts_imgs:
-        st.markdown("---")
-        st.subheader("일평균 SST 추이")
-        _, c2, _ = st.columns([1, 6, 1])
-        with c2:
-            st.image(str(ts_imgs[0]), use_container_width=True)
+    item1, item2, item3 = st.tabs(["일별 지도", "공간분포", "시계열"])
+
+    with item1:
+        if hot_pick is not None:
+            st.image(str(hot_imgs[hot_pick]), caption=hot_imgs[hot_pick].stem, width=620)
+
+    with item2:
+        if hot_imgs:
+            preview = hot_imgs[:4]
+            cols = st.columns(2)
+            for idx, img in enumerate(preview):
+                with cols[idx % 2]:
+                    st.image(str(img), caption=img.stem, width=300)
+        else:
+            st.info("고수온 공간분포 결과가 없습니다.")
+
+    with item3:
+        if ts_imgs:
+            center1, center2, center3 = st.columns([1, 2, 1])
+            with center2:
+                st.image(str(ts_imgs[0]), width=620)
+        else:
+            st.info("일별 시계열 결과가 없습니다.")

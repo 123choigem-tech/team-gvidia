@@ -76,19 +76,32 @@ section.main .block-container {
 .stButton > button {
     border-radius: 12px;
     font-weight: 700;
-    background: linear-gradient(135deg, #005f6e, #00a896);
+    background: linear-gradient(135deg, #08324f, #0e5f7a);
     color: white !important;
     border: 1px solid rgba(0,194,212,0.25) !important;
-    box-shadow: 0 4px 16px rgba(0,168,150,0.25);
+    box-shadow: 0 4px 16px rgba(0,96,144,0.25);
     transition: all 0.2s;
 }
 .stButton > button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,168,150,0.35);
+    box-shadow: 0 8px 24px rgba(0,168,212,0.28);
     border-color: var(--cyan) !important;
 }
 .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #006a7a, #00c2d4) !important;
+    background: linear-gradient(135deg, #0b5f8a, #00c2d4) !important;
+    border-color: rgba(0,229,255,0.35) !important;
+}
+.stButton > button[kind="primary"]:hover {
+    background: linear-gradient(135deg, #0f719f, #21d8e8) !important;
+}
+
+/* 폼 submit 버튼 */
+div[data-testid="stFormSubmitButton"] > button {
+    background: linear-gradient(135deg, #0b5f8a, #00c2d4) !important;
+    border-color: rgba(0,229,255,0.35) !important;
+}
+div[data-testid="stFormSubmitButton"] > button:hover {
+    background: linear-gradient(135deg, #0f719f, #21d8e8) !important;
 }
 
 /* 데이터프레임 */

@@ -61,14 +61,14 @@ def inject_alerts(alerts: list[dict]) -> None:
       position: relative !important;
     }}
     .hwa-alarm {{
-      background: linear-gradient(135deg, #3a0a0a, #1a0505) !important;
-      border: 1px solid rgba(255,80,80,0.4) !important;
-      color: #ffcccc !important;
+      background: linear-gradient(135deg, #0c2234, #071522) !important;
+      border: 1px solid rgba(0,194,212,0.28) !important;
+      color: #cfefff !important;
     }}
     .hwa-advisory {{
-      background: linear-gradient(135deg, #2a2200, #1a1600) !important;
-      border: 1px solid rgba(255,220,0,0.4) !important;
-      color: #fff3aa !important;
+      background: linear-gradient(135deg, #10293c, #0b1b28) !important;
+      border: 1px solid rgba(0,168,150,0.25) !important;
+      color: #d6f7f0 !important;
     }}
     .hwa-icon {{
       font-size: 20px !important;
@@ -109,8 +109,8 @@ def inject_alerts(alerts: list[dict]) -> None:
       border-radius: 0 0 12px 12px !important;
       animation: hwaBar 8s linear forwards !important;
     }}
-    .hwa-alarm    .hwa-bar {{ background: #ff5050 !important; }}
-    .hwa-advisory .hwa-bar {{ background: #ffd000 !important; }}
+    .hwa-alarm    .hwa-bar {{ background: linear-gradient(90deg, #00c2d4, #00e5ff) !important; }}
+    .hwa-advisory .hwa-bar {{ background: linear-gradient(90deg, #00a896, #66ffd9) !important; }}
     @keyframes hwaBar {{
       from {{ width: 100% !important; }}
       to   {{ width: 0%   !important; }}
@@ -124,7 +124,7 @@ def inject_alerts(alerts: list[dict]) -> None:
 
   alerts.forEach(function(a, i) {{
     var cls   = a.level === 'alarm' ? 'hwa-alarm' : 'hwa-advisory';
-    var icon  = a.level === 'alarm' ? '🔴' : '🟡';
+    var icon  = a.level === 'alarm' ? '⚓' : '◦';
     var label = a.level === 'alarm' ? '고수온 경보' : '고수온 주의보';
     var detail = a.level === 'alarm'
       ? '현재 ' + a.current_streak + '일 연속 지속 중 · 최근 ' + a.latest_sst.toFixed(1) + '°C'

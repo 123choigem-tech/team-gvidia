@@ -474,13 +474,26 @@ def _build_pdf(
         Paragraph(
             f"뉴스 이벤트 총 <b>{len(news_df):,}건</b> / "
             f"해수면온도 2025.7.1~8.31(62일) / 고수온 기준 <b>{threshold}°C</b>.", kor),
-        Spacer(1, 6*mm),
+        Spacer(1, 4*mm),
     ]
+    # 통계 표 먼저
     if freq_df is not None and not freq_df.empty:
+        story.append(Paragraph("고수온 이벤트 발생 지역 통계 (뉴스 크롤링)", h2))
+        story.append(Paragraph(
+            f"설정 기간 지역별 고수온 재난 발생 횟수(총 {len(news_df):,}건). "
+            f"{top5} 등 남해안과 제주에 발생이 집중됨.", kor))
+        story.append(Spacer(1, 2*mm))
+        show = freq_df.sort_values("count", ascending=False).head(20)
+        tdata = [["순위", "지역", "발생 건수"]]
+        for i, (_, r) in enumerate(show.iterrows(), 1):
+            tdata.append([str(i), str(r["location"]), str(int(r["count"]))])
+        story.append(_table(tdata, [20*mm, 100*mm, 50*mm]))
+        story.append(Spacer(1, 5*mm))
+        # 관심지역 지도
         try:
             map_png = _make_region_map_png(freq_df)
             story.append(Paragraph("관심지역 분포 지도 (뉴스 크롤링 기반)", h2))
-            story.append(RLImage(str(map_png), width=170*mm, height=120*mm))
+            story.append(RLImage(str(map_png), width=170*mm, height=115*mm))
         except Exception:
             pass
 
@@ -513,20 +526,8 @@ def _build_pdf(
                 f"격자 평균 최고 {sst_max}℃.", kor))
         story.append(RLImage(str(imgs_ts[0]), width=160*mm, height=55*mm))
 
-    # ── 3페이지: 크롤링 지역 통계 표 (상위 20) + SST 통계 ──────
+    # ── 3페이지: SST 통계 ──────────────────────────────────────
     story.append(PageBreak())
-    story.append(Paragraph("고수온 이벤트 발생 지역 통계 (뉴스 크롤링)", h2))
-    if freq_df is not None and not freq_df.empty:
-        story.append(Paragraph(
-            f"설정 기간 지역별 고수온 재난 발생 횟수(총 {len(news_df):,}건). "
-            f"{top5} 등 남해안과 제주에 발생이 집중됨.", kor))
-        story.append(Spacer(1, 3*mm))
-        show = freq_df.sort_values("count", ascending=False).head(20)
-        tdata = [["순위", "지역", "발생 건수"]]
-        for i, (_, r) in enumerate(show.iterrows(), 1):
-            tdata.append([str(i), str(r["location"]), str(int(r["count"]))])
-        story.append(_table(tdata, [20*mm, 100*mm, 50*mm]))
-        story.append(Spacer(1, 6*mm))
     if not sst_stat_df.empty:
         story.append(Paragraph("지역별 SST 통계", h2))
         cols_s = list(sst_stat_df.columns)

@@ -41,6 +41,7 @@ SST_DIR      = _ROOT / "data"
 SST_HOT_IMG  = _ROOT / "data/results/sst_analysis/sst_over28/img"
 SST_PERS_DIR = _ROOT / "data/results/sst_analysis/persistence"
 SST_TS_DIR   = _ROOT / "data/results/sst_analysis/timeseries"
+SST_TS_PNG   = SST_TS_DIR / "SST_daily_mean_20250701_20250831.png"
 
 # 포함 가능한 섹션 목록 (순서 = 보고서 순서, 번들 구조 반영)
 ALL_SECTIONS = ["overview", "news", "consec_map", "freq_map", "timeseries", "sst_stats", "hotmap", "conclusion"]
@@ -210,8 +211,7 @@ def _build_docx(
     if imgs_freq2:
         doc.add_heading("② 고수온 누적 발생빈도 분포 (2일↑)", 2)
         doc.add_picture(str(imgs_freq2[0]), width=Inches(5.5))
-    imgs_ts = sorted(SST_TS_DIR.glob("SST_daily_mean_*.png")) if SST_TS_DIR.exists() else []
-    if imgs_ts:
+    if SST_TS_PNG.exists():
         doc.add_heading("③ 일평균 SST 시계열 트렌드", 2)
         _docx_timeseries(doc, ts_df)
     doc.add_page_break()
@@ -256,9 +256,8 @@ def _docx_timeseries(doc, ts_df):
     from docx.shared import Inches
     doc.add_heading("2. 일평균 SST 시계열", 1)
     # 이미지
-    imgs = sorted(SST_TS_DIR.glob("SST_daily_mean_*.png")) if SST_TS_DIR.exists() else []
-    if imgs:
-        doc.add_picture(str(imgs[0]), width=Inches(5.5))
+    if SST_TS_PNG.exists():
+        doc.add_picture(str(SST_TS_PNG), width=Inches(5.5))
     # 표
     if ts_df is not None:
         doc.add_paragraph("일평균 SST 데이터 (상위 10일):")
@@ -516,15 +515,14 @@ def _build_pdf(
             f"뉴스 기반 관심지역({top5})과 공간적으로 일치함.", kor))
         story.append(RLImage(str(imgs_freq2[0]), width=160*mm, height=70*mm))
         story.append(Spacer(1, 3*mm))
-    imgs_ts = sorted(SST_TS_DIR.glob("SST_daily_mean_*.png")) if SST_TS_DIR.exists() else []
-    if imgs_ts:
+    if SST_TS_PNG.exists():
         story.append(Paragraph("③ 일평균 SST 시계열 트렌드", h2))
         if sst_start is not None:
             diff = round(sst_end - sst_start, 1)
             story.append(Paragraph(
                 f"7월 초 평균 {sst_start}℃ → 8월 말 {sst_end}℃ (약 {diff}℃ 상승), "
                 f"격자 평균 최고 {sst_max}℃.", kor))
-        story.append(RLImage(str(imgs_ts[0]), width=160*mm, height=55*mm))
+        story.append(RLImage(str(SST_TS_PNG), width=160*mm, height=55*mm))
 
     # ── 3페이지: SST 통계 ──────────────────────────────────────
     story.append(PageBreak())

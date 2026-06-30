@@ -30,3 +30,9 @@ openai
 
 # --- 보고서 ---
 python-docx
+
+# --- 보고서 ---
+reportlab
+lxml
+Pillow
+anthropic

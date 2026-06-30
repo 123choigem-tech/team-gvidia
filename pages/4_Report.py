@@ -70,7 +70,7 @@ with col_b:
     use_ai = st.checkbox("AI 서술 포함", value=True)
     st.caption("hwpx 선택 시 geosr-hwpx 스킬이 설치된 경우에만 생성됩니다.")
 
-selected_sections = ["overview", "timeseries", "hotmap", "freq_map", "consec_map", "sst_stats", "news"]
+selected_sections = ["overview", "news", "consec_map", "freq_map", "timeseries", "sst_stats", "hotmap", "conclusion"]
 
 if st.button("보고서 생성", type="primary", use_container_width=True):
     try:

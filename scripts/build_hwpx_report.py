@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(Path.home() / ".claude/skills/geosr-hwpx/scripts"))
+sys.path.insert(0, str(ROOT / "hwpx" / "scripts"))
 from yebobu_builder import YeoboBuilder
 
 # ── 경로 ─────────────────────────────────────────────────────────

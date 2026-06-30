@@ -92,7 +92,7 @@ if st.button("보고서 생성", type="primary", use_container_width=True):
 
             if fmt == "hwpx":
                 import sys, importlib.util
-                sys.path.insert(0, str(Path.home() / ".claude/skills/geosr-hwpx/scripts"))
+                sys.path.insert(0, str(Path("hwpx/scripts")))
                 try:
                     spec = importlib.util.spec_from_file_location(
                         "build_hwpx_report", Path("scripts/build_hwpx_report.py")

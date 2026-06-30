@@ -274,13 +274,44 @@ def _docx_timeseries(doc, ts_df):
     doc.add_paragraph()
 
 
-def _docx_image(doc, imgs: list, heading: str, max_imgs: int = 1):
-    from docx.shared import Inches
+def _docx_image(doc, imgs: list, heading: str, max_imgs: int = 1, grid2x2: bool = False):
+    from docx.shared import Inches, Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    import datetime as _dt
+    _WD = ["월", "화", "수", "목", "금", "토", "일"]
+
+    def _lbl(p):
+        raw = p.stem.replace("KHOA_SST_L4_Z003_D01_WGS001K_U", "").replace("_HOT28", "")
+        try:
+            d = _dt.date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
+            return f"{d.month}월 {d.day}일 ({_WD[d.weekday()]})"
+        except Exception:
+            return p.stem
+
     if not imgs:
         return
     doc.add_heading(heading, 1)
-    for img in imgs[:max_imgs]:
-        doc.add_picture(str(img), width=Inches(5.5))
+    target = list(imgs)[-max_imgs:]
+    if grid2x2 and len(target) >= 2:
+        pairs = [target[i:i+2] for i in range(0, len(target), 2)]
+        for pair in pairs:
+            tbl = doc.add_table(rows=2, cols=2)
+            tbl.style = "Table Grid"
+            for col_idx, img_path in enumerate(pair):
+                cell_img = tbl.cell(0, col_idx)
+                cell_img.paragraphs[0].clear()
+                cell_img.paragraphs[0].add_run().add_picture(str(img_path), width=Inches(2.8))
+                cell_lbl = tbl.cell(1, col_idx)
+                p = cell_lbl.paragraphs[0]
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run = p.add_run(_lbl(img_path))
+                run.font.size = Pt(8)
+            if len(pair) == 1:
+                tbl.cell(0, 1).paragraphs[0].add_run("")
+            doc.add_paragraph()
+    else:
+        for img in target:
+            doc.add_picture(str(img), width=Inches(5.5))
     doc.add_paragraph()
 
 

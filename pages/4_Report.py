@@ -39,7 +39,7 @@ col_a, col_b = st.columns([1, 1])
 with col_a:
     title = st.text_input("보고서 제목", value="2025년 하절기 고수온 연안재해 분석 보고서")
     threshold = st.slider("고수온 기준(℃)", 24.0, 32.0, 28.0, 0.5)
-    top_n = st.slider("기사 포함 개수", 5, 50, 20, 5)
+    top_n = 20
 with col_b:
     fmt = st.radio("출력 형식", ["both", "docx", "pdf", "hwpx"], horizontal=True)
     use_ai = st.checkbox("AI 서술 포함", value=True)

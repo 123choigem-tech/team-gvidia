@@ -38,18 +38,50 @@ _ROOT        = Path(__file__).parent.parent
 DISASTER_DB  = _ROOT / "data/processed/disaster_db/disaster_events.csv"
 REGION_FREQ  = _ROOT / "data/results/frequency/region_frequency.csv"
 SST_DIR      = _ROOT / "data"
-SST_HOT_IMG  = _ROOT / "data/sst/hot/img"
-SST_PERS_DIR = _ROOT / "data/sst/persistence"
-SST_TS_DIR   = _ROOT / "data/sst/timeseries"
+SST_HOT_IMG  = _ROOT / "data/results/sst_analysis/sst_over28/img"
+SST_PERS_DIR = _ROOT / "data/results/sst_analysis/persistence"
+SST_TS_DIR   = _ROOT / "data/results/sst_analysis/timeseries"
 
-# 포함 가능한 섹션 목록 (순서 = 보고서 순서)
-ALL_SECTIONS = ["overview", "timeseries", "hotmap", "freq_map", "consec_map", "sst_stats", "news"]
+# 포함 가능한 섹션 목록 (순서 = 보고서 순서, 번들 구조 반영)
+ALL_SECTIONS = ["overview", "news", "consec_map", "freq_map", "timeseries", "sst_stats", "hotmap", "conclusion"]
+SST_HOTLOW_IMG  = _ROOT / "data/results/hotlowsal/img"
+REGION_MAP_PNG  = _ROOT / "data/results/frequency/region_map.png"
+REGION_MAP_DIR  = _ROOT / "data/results/frequency"
 
 
 # ── 데이터 로더 ──────────────────────────────────────────
 
 def _load_news() -> pd.DataFrame:
     return pd.read_csv(DISASTER_DB, encoding="utf-8", parse_dates=["date"])
+
+
+def _make_region_map_png(freq_df: pd.DataFrame) -> Path:
+    """관심지역 지도를 PNG로 저장하고 경로 반환."""
+    import plotly.express as px
+    df = freq_df.dropna(subset=["lat", "lon"]).copy()
+    fig = px.scatter_geo(
+        df, lat="lat", lon="lon", size="count",
+        hover_name="location", text="location",
+        color="count", color_continuous_scale="Teal",
+        size_max=30, scope="asia",
+        center=dict(lat=36.5, lon=127.5),
+    )
+    fig.update_geos(
+        fitbounds="locations", visible=True, resolution=50,
+        showcountries=True, countrycolor="#aaaaaa",
+        showland=True, landcolor="#f0f4f8",
+        showocean=True, oceancolor="#ddeeff",
+    )
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=0, b=0),
+        coloraxis_showscale=False, showlegend=False,
+        height=500, width=700,
+    )
+    fig.update_traces(textposition="top center", textfont_size=9)
+    out = REGION_MAP_DIR / "region_map.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.write_image(str(out), scale=2)
+    return out
 
 
 def _load_sst_frames(threshold: float) -> tuple[dict, pd.DataFrame]:
@@ -132,6 +164,7 @@ def _build_docx(
     narrative: str,
     threshold: float,
     top_n: int,
+    freq_df: pd.DataFrame | None = None,
 ) -> bytes:
     from docx import Document
     from docx.shared import Inches, Pt
@@ -151,22 +184,57 @@ def _build_docx(
                 doc.add_paragraph(line.strip())
         doc.add_paragraph()
 
-    section_funcs = {
-        "overview": lambda: _docx_overview(doc, news_df, sst_stat_df),
-        "timeseries": lambda: _docx_timeseries(doc, ts_df),
-        "hotmap": lambda: _docx_image(doc, sorted(SST_HOT_IMG.glob("*.png")),
-                                      "일별 고수온(28°C↑) 분포 지도", max_imgs=3),
-        "freq_map": lambda: _docx_image(doc, sorted(SST_PERS_DIR.glob("SST_HOTFREQ*.png")),
-                                        "누적 빈도 분포 지도 (2일↑)"),
-        "consec_map": lambda: _docx_image(doc, sorted(SST_PERS_DIR.glob("SST_MAXCONSEC*.png")),
-                                          "최장 연속 분포 지도 (3일↑)"),
-        "sst_stats": lambda: _docx_sst_stats(doc, sst_stat_df),
-        "news": lambda: _docx_news(doc, news_df, top_n),
-    }
+    top5_locs = (
+        "·".join(freq_df.sort_values("count", ascending=False)["location"].head(5).tolist())
+        if freq_df is not None and not freq_df.empty else "-"
+    )
 
-    for sec in sections:
-        if sec in section_funcs:
-            section_funcs[sec]()
+    # 1페이지: 개요 + 관심지역 지도
+    _docx_overview(doc, news_df, sst_stat_df)
+    if freq_df is not None and not freq_df.empty:
+        try:
+            map_png = _make_region_map_png(freq_df)
+            doc.add_heading("관심지역 분포 지도 (뉴스 크롤링 기반)", 1)
+            doc.add_picture(str(map_png), width=Inches(5.5))
+        except Exception:
+            pass
+    doc.add_page_break()
+
+    # 2페이지: 분석 이미지 3개
+    doc.add_heading("위성 SST 공간·시계열 분석 (2025.7.1~8.31)", 1)
+    imgs_consec = sorted(SST_PERS_DIR.glob("SST_MAXCONSEC*.png"))
+    if imgs_consec:
+        doc.add_heading("① 고수온 최장 연속 지속일수 분포", 2)
+        doc.add_picture(str(imgs_consec[0]), width=Inches(5.5))
+    imgs_freq2 = sorted(SST_PERS_DIR.glob("SST_HOTFREQ*.png"))
+    if imgs_freq2:
+        doc.add_heading("② 고수온 누적 발생빈도 분포 (2일↑)", 2)
+        doc.add_picture(str(imgs_freq2[0]), width=Inches(5.5))
+    imgs_ts = sorted(SST_TS_DIR.glob("SST_daily_mean_*.png")) if SST_TS_DIR.exists() else []
+    if imgs_ts:
+        doc.add_heading("③ 일평균 SST 시계열 트렌드", 2)
+        _docx_timeseries(doc, ts_df)
+    doc.add_page_break()
+
+    # 3페이지: 크롤링 지역 통계 표 (상위 20)
+    _docx_news(doc, news_df, top_n, freq_df)
+    if not sst_stat_df.empty:
+        _docx_sst_stats(doc, sst_stat_df)
+    doc.add_page_break()
+
+    # 4페이지: HOT28 분포 이미지 4개(2×2) + 결론
+    _docx_image(doc, sorted(SST_HOT_IMG.glob("*.png")),
+                "일별 고수온(28°C↑) 분포 지도 (최근 4일)", max_imgs=4, grid2x2=True)
+    doc.add_heading("결론 및 시사점", 1)
+    doc.add_paragraph(
+        f"뉴스 발생 빈도와 위성 고수온 분석이 남해안·제주에서 공간적으로 일치 "
+        f"→ 관심지역({top5_locs}) 자동 도출의 타당성을 확인함."
+    )
+    doc.add_paragraph(
+        "고수온 장기 지속 해역과 저염분 중첩 해역을 우선 경계 대상으로 설정하여 "
+        "양식어가 피해 예방에 선제적으로 대응 가능."
+    )
+    doc.add_paragraph("※ 출처: 한국언론진흥재단·빅카인즈(뉴스 메타데이터), 국가해양위성센터 KHOA L4 해수면온도")
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -231,18 +299,29 @@ def _docx_sst_stats(doc, sst_stat_df):
     doc.add_paragraph()
 
 
-def _docx_news(doc, news_df, top_n):
-    doc.add_heading(f"주요 재난 뉴스 (최근 {top_n}건)", 1)
-    recent = news_df.sort_values("date", ascending=False).head(top_n)
-    t = doc.add_table(rows=1, cols=3, style="Table Grid")
-    for i, h in enumerate(["날짜", "지역", "제목"]):
-        t.rows[0].cells[i].text = h
-    for _, r in recent.iterrows():
-        row = t.add_row().cells
-        row[0].text = str(r["date"])[:10]
-        row[1].text = str(r.get("location", ""))
-        row[2].text = str(r.get("title", ""))[:80]
-    doc.add_paragraph()
+def _docx_news(doc, news_df, top_n, freq_df: pd.DataFrame | None = None):
+    from docx.shared import Inches
+    doc.add_heading("고수온 이벤트 분석결과 (뉴스 크롤링)", 1)
+    if freq_df is not None and not freq_df.empty:
+        doc.add_paragraph(f"설정 기간 지역별 고수온 재난 발생 횟수 (총 {len(news_df):,}건)")
+        show = freq_df.sort_values("count", ascending=False).head(10)
+        t = doc.add_table(rows=1, cols=3, style="Table Grid")
+        for i, h in enumerate(["순위", "지역", "발생 건수"]):
+            t.rows[0].cells[i].text = h
+        for i, (_, r) in enumerate(show.iterrows(), 1):
+            row = t.add_row().cells
+            row[0].text = str(i)
+            row[1].text = str(r["location"])
+            row[2].text = str(r["count"])
+        doc.add_paragraph()
+        # 관심지역 지도
+        try:
+            map_png = _make_region_map_png(freq_df)
+            doc.add_heading("관심지역 분포 지도", 1)
+            doc.add_picture(str(map_png), width=Inches(5.5))
+        except Exception:
+            pass
+        doc.add_paragraph()
 
 
 # ── PDF 생성 ─────────────────────────────────────────────
@@ -256,6 +335,7 @@ def _build_pdf(
     narrative: str,
     threshold: float,
     top_n: int,
+    freq_df: pd.DataFrame | None = None,
 ) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -326,56 +406,89 @@ def _build_pdf(
                 story.append(Paragraph(line.strip(), kor))
         story.append(Spacer(1, 4*mm))
 
+    # SST 트렌드 수치 계산
+    sst_start = sst_end = sst_max = None
+    if ts_df is not None:
+        _s = ts_df.sort_values("date")
+        sst_start = round(_s.iloc[0]["mean_sst"], 1)
+        sst_end   = round(_s.iloc[-1]["mean_sst"], 1)
+        sst_max   = round(ts_df["mean_sst"].max(), 1)
+
+    top_region = news_df["location"].value_counts().index[0] if not news_df.empty else "-"
+    top5 = "·".join(
+        (freq_df.sort_values("count", ascending=False)["location"].head(5).tolist()
+         if freq_df is not None and not freq_df.empty else [])
+    ) or top_region
+
     sec_order = {s: i for i, s in enumerate(ALL_SECTIONS)}
     for sec in sorted(sections, key=lambda s: sec_order.get(s, 99)):
 
         if sec == "overview":
-            top = news_df["location"].value_counts().index[0] if not news_df.empty else "-"
             story += [
                 Paragraph("개요", h2),
                 Paragraph(
-                    f"총 {len(news_df):,}건 기사 분석 결과 최다 언급 지역은 <b>{top}</b>. "
-                    f"{len(sst_stat_df)}개 지역 실측 SST 기반 고수온 현황 분석.", kor),
-                Spacer(1, 3*mm),
+                    f"재난 뉴스(고수온) 발생 빈도로 관심지역을 도출하고, "
+                    f"국가해양위성센터 해수면온도(SST) 자료로 해당 해역의 "
+                    f"고수온 발생·지속·트렌드를 분석함.", kor),
+                Paragraph(
+                    f"뉴스 이벤트 총 <b>{len(news_df):,}건</b> / "
+                    f"해수면온도 2025.7.1~8.31(62일) / 고수온 기준 <b>{threshold}°C</b>.", kor),
+                Spacer(1, 4*mm),
             ]
 
-        elif sec == "timeseries":
-            story.append(Paragraph("일평균 SST 시계열", h2))
-            imgs = sorted(SST_TS_DIR.glob("SST_daily_mean_*.png")) if SST_TS_DIR.exists() else []
-            if imgs:
-                story.append(RLImage(str(imgs[0]), width=160*mm, height=55*mm))
-            if ts_df is not None:
-                show = ts_df.sort_values("mean_sst", ascending=False).head(8)
-                cols_show = [c for c in show.columns if c != "valid_cells"]
-                tdata = [cols_show] + [[f"{v:.2f}" if isinstance(v, float) else str(v)[:16]
-                                        for v in row] for row in show[cols_show].values]
-                story.append(_table(tdata, [170*mm / len(cols_show)] * len(cols_show)))
-            story.append(Spacer(1, 4*mm))
-
-        elif sec == "hotmap":
-            imgs = sorted(SST_HOT_IMG.glob("*.png"))[:3]
-            if imgs:
-                story.append(Paragraph("일별 고수온 분포 지도 (최근 3일)", h2))
-                for img in imgs:
-                    date_str = img.stem.split("_U")[-1].replace("_HOT28", "")
-                    date_fmt = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
-                    story.append(Paragraph(date_fmt, kor))
-                    story.append(RLImage(str(img), width=160*mm, height=75*mm))
-                story.append(Spacer(1, 4*mm))
-
-        elif sec == "freq_map":
-            imgs = sorted(SST_PERS_DIR.glob("SST_HOTFREQ*.png"))
-            if imgs:
-                story.append(Paragraph("누적 빈도 분포 지도 (2일↑)", h2))
-                story.append(RLImage(str(imgs[0]), width=160*mm, height=80*mm))
+        elif sec == "news":
+            if freq_df is not None and not freq_df.empty:
+                story.append(Paragraph("고수온 이벤트 분석결과 (뉴스 크롤링)", h2))
+                story.append(Paragraph(
+                    f"설정 기간 동안 지역별 고수온 재난 발생 횟수(총 {len(news_df):,}건). "
+                    f"{top5} 등 남해안과 제주에 발생이 집중됨.", kor))
+                # 빈도 표
+                show = freq_df.sort_values("count", ascending=False).head(10)
+                tdata = [["순위", "지역", "발생 건수"]]
+                for i, (_, r) in enumerate(show.iterrows(), 1):
+                    tdata.append([str(i), str(r["location"]), str(r["count"])])
+                story.append(_table(tdata, [20*mm, 80*mm, 70*mm]))
+                story.append(Spacer(1, 3*mm))
+                # 관심지역 지도
+                try:
+                    map_png = _make_region_map_png(freq_df)
+                    story.append(Paragraph("관심지역 분포 지도", h2))
+                    story.append(RLImage(str(map_png), width=160*mm, height=110*mm))
+                except Exception:
+                    pass
                 story.append(Spacer(1, 4*mm))
 
         elif sec == "consec_map":
             imgs = sorted(SST_PERS_DIR.glob("SST_MAXCONSEC*.png"))
+            story.append(Paragraph("고수온 지속일수 분석 (2025.7.1~8.31)", h2))
+            story.append(Paragraph(
+                "남해안 연안을 중심으로 28℃ 이상이 여러 날 연속 지속된 해역이 형성됨. "
+                "연속 지속일수가 긴 격자일수록 양식생물 피해 위험이 누적되어 우선 관리 대상.", kor))
             if imgs:
-                story.append(Paragraph("최장 연속 분포 지도 (3일↑)", h2))
                 story.append(RLImage(str(imgs[0]), width=160*mm, height=80*mm))
-                story.append(Spacer(1, 4*mm))
+            story.append(Spacer(1, 4*mm))
+
+        elif sec == "freq_map":
+            imgs = sorted(SST_PERS_DIR.glob("SST_HOTFREQ*.png"))
+            story.append(Paragraph("고수온 빈도 공간 분석 (2025.7.1~8.31)", h2))
+            story.append(Paragraph(
+                f"남해안·제주 연안에서 고수온 발생 빈도가 높게 누적되며, "
+                f"뉴스 기반 관심지역({top5})과 공간적으로 일치함.", kor))
+            if imgs:
+                story.append(RLImage(str(imgs[0]), width=160*mm, height=80*mm))
+            story.append(Spacer(1, 4*mm))
+
+        elif sec == "timeseries":
+            imgs = sorted(SST_TS_DIR.glob("SST_daily_mean_*.png")) if SST_TS_DIR.exists() else []
+            story.append(Paragraph("평균 해수면온도 트렌드 (2025.7.1~8.31)", h2))
+            if sst_start is not None:
+                diff = round(sst_end - sst_start, 1)
+                story.append(Paragraph(
+                    f"7월 초 평균 {sst_start}℃에서 8월 말 {sst_end}℃로 약 {diff}℃ 지속 상승, "
+                    f"격자 평균 최고 {sst_max}℃. 여름철 해수면온도의 뚜렷한 상승 추세.", kor))
+            if imgs:
+                story.append(RLImage(str(imgs[0]), width=160*mm, height=55*mm))
+            story.append(Spacer(1, 4*mm))
 
         elif sec == "sst_stats" and not sst_stat_df.empty:
             story.append(Paragraph("지역별 SST 통계", h2))
@@ -384,16 +497,31 @@ def _build_pdf(
             story.append(_table(tdata, [170*mm / len(cols_s)] * len(cols_s)))
             story.append(Spacer(1, 4*mm))
 
-        elif sec == "news":
-            story.append(Paragraph(f"주요 재난 뉴스 (최근 {top_n}건)", h2))
-            recent = news_df.sort_values("date", ascending=False).head(top_n)
-            tdata  = [["날짜", "지역", "제목"]]
-            for _, r in recent.iterrows():
-                tdata.append([str(r["date"])[:10],
-                              str(r.get("location", "")),
-                              str(r.get("title", ""))[:55]])
-            story.append(_table(tdata, [28*mm, 20*mm, 122*mm]))
-            story.append(Spacer(1, 4*mm))
+        elif sec == "hotmap":
+            imgs = sorted(SST_HOT_IMG.glob("*.png"))[-3:]
+            if imgs:
+                story.append(Paragraph("일별 고수온 분포 지도 (최근 3일)", h2))
+                for img in imgs:
+                    date_str = img.stem.split("_U")[-1].replace("_HOT28", "")
+                    date_fmt = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+                    story.append(Paragraph(date_fmt, kor))
+                    story.append(RLImage(str(img), width=160*mm, height=70*mm))
+                story.append(Spacer(1, 4*mm))
+
+        elif sec == "conclusion":
+            story += [
+                Paragraph("결론 및 시사점", h2),
+                Paragraph(
+                    f"뉴스 발생 빈도와 위성 고수온 분석이 남해안·제주에서 공간적으로 일치 "
+                    f"→ 관심지역({top5}) 자동 도출의 타당성을 확인함.", kor),
+                Paragraph(
+                    "고수온 장기 지속 해역과 저염분 중첩 해역을 우선 경계 대상으로 설정하여 "
+                    "양식어가 피해 예방에 선제적으로 대응 가능.", kor),
+                Spacer(1, 3*mm),
+                Paragraph("※ 출처: 한국언론진흥재단·빅카인즈(뉴스 메타데이터), "
+                           "국가해양위성센터 KHOA L4 해수면온도", kor),
+                Spacer(1, 4*mm),
+            ]
 
     doc.build(story)
     buf.seek(0)
@@ -434,9 +562,7 @@ def run(
         "filename_stem": str,
     }
     """
-    sections = include_sections if include_sections else ALL_SECTIONS
-    if "timeseries" not in sections:
-        sections = ["timeseries"] + sections
+    sections = include_sections if include_sections else ALL_SECTIONS[:]
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M")
 
@@ -444,6 +570,7 @@ def run(
     news_df        = _load_news()
     _, sst_stat_df = _load_sst_frames(threshold)
     ts_df          = _load_timeseries()
+    freq_df        = pd.read_csv(REGION_FREQ, encoding="utf-8") if REGION_FREQ.exists() else None
 
     narrative = ""
     if use_ai:
@@ -462,7 +589,7 @@ def run(
     if fmt in ("docx", "both"):
         print("[report_agent] Word 생성 중...")
         docx_bytes = _build_docx(title, sections, news_df, sst_stat_df,
-                                 ts_df, narrative, threshold, top_n_regions)
+                                 ts_df, narrative, threshold, top_n_regions, freq_df)
         entry: dict = {"bytes": docx_bytes, "path": None}
         if output_dir:
             out_dir = Path(output_dir)
@@ -476,7 +603,7 @@ def run(
     if fmt in ("pdf", "both"):
         print("[report_agent] PDF 생성 중...")
         pdf_bytes = _build_pdf(title, sections, news_df, sst_stat_df,
-                               ts_df, narrative, threshold, top_n_regions)
+                               ts_df, narrative, threshold, top_n_regions, freq_df)
         entry = {"bytes": pdf_bytes, "path": None}
         if output_dir:
             out_dir = Path(output_dir)

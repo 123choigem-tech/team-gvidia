@@ -16,12 +16,14 @@ inject()
 inject_alerts(get_active_alerts())
 
 st.title("🌡️ 해수면온도 분석")
-st.caption("실제 수집된 SST CSV로 지역별 고수온 추세를 비교합니다.")
+st.caption("실제 수집된 SST CSV를 바탕으로 지역별 추세와 시각자료를 함께 확인합니다.")
 
 DATA_DIR = Path("data")
 DEFAULT_THRESHOLD = 28.0
 CONSEC_MIN = 3
 FREQ_MIN = 2
+TS_DIR = Path("data/sst/timeseries")
+HOT_IMG_DIR = Path("data/sst/hot/img")
 
 
 @st.cache_data(ttl=300)
@@ -38,8 +40,9 @@ def load_sst_by_region() -> dict[str, pd.DataFrame]:
         if region in {"geocode", "regions", "Tongyeong"}:
             continue
         df = pd.read_csv(f, encoding="utf-8", parse_dates=["date"])
-        if {"date", "sst", "source"}.issubset(df.columns) and df["source"].iloc[0] == "KHOA_OPeNDAP":
-            result[region] = df.sort_values("date").reset_index(drop=True)
+        if {"date", "sst", "source"}.issubset(df.columns) and not df.empty:
+            if str(df["source"].iloc[0]) == "KHOA_OPeNDAP":
+                result[region] = df.sort_values("date").reset_index(drop=True)
     return result
 
 
@@ -91,10 +94,10 @@ flags[1].warning(f"연속 {CONSEC_MIN}일 이상 지역: {sum(1 for r in selecte
 
 st.markdown("---")
 
-tab1, tab2, tab3 = st.tabs(["추세", "빈도", "원본"])
+tab1, tab2, tab3 = st.tabs(["분석결과", "지역빈도", "시각자료"])
 
 with tab1:
-    st.subheader("일별 SST 추이")
+    st.subheader("일별 SST 분석결과")
     fig = go.Figure()
     for region in selected:
         df = sst_data[region].sort_values("date")
@@ -111,10 +114,11 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
 with tab2:
-    st.subheader("관심 지역 언급 빈도")
+    st.subheader("관심 지역 빈도")
     if not freq_df.empty:
+        top_freq = freq_df.sort_values("count", ascending=True).head(12)
         fig2 = px.bar(
-            freq_df.sort_values("count", ascending=True).head(12),
+            top_freq,
             x="count",
             y="location",
             orientation="h",
@@ -134,10 +138,99 @@ with tab2:
         st.info("지역 빈도 파일이 없습니다.")
 
 with tab3:
-    st.subheader("원본 SST 데이터")
-    for region in selected:
-        with st.expander(region, expanded=False):
-            df = sst_data[region].copy()
-            df["date"] = df["date"].dt.strftime("%Y-%m-%d")
-            show_cols = [c for c in ["date", "lat", "lon", "sst", "source"] if c in df.columns]
-            st.dataframe(df[show_cols].head(100), use_container_width=True, height=260)
+    import datetime as _dt
+
+    _WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
+
+    def _date_label(img_path) -> str:
+        raw = img_path.stem.replace("KHOA_SST_L4_Z003_D01_WGS001K_U", "").replace("_HOT28", "")
+        try:
+            d = _dt.date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
+            return f"{d.month}월 {d.day}일 ({_WEEKDAY_KO[d.weekday()]})"
+        except Exception:
+            return raw
+
+    ts_imgs = sorted(TS_DIR.glob("SST_daily_mean_*.png"))
+    hot_imgs = sorted(HOT_IMG_DIR.glob("*_HOT28.png"))
+    ss_imgs = sorted(Path("data/results/HS28NLS26/south_sea").glob("*_region.png"))
+
+    def _ss_label(p) -> str:
+        raw = p.stem.replace("HOTLOWSAL_", "").replace("_region", "")
+        try:
+            d = _dt.date(int(raw[:4]), int(raw[4:6]), int(raw[6:8]))
+            return f"{d.month}월 {d.day}일 ({_WEEKDAY_KO[d.weekday()]})"
+        except Exception:
+            return raw
+
+    vt1, vt2, vt3 = st.tabs(["고수온 분포 지도", "남해 고수온·저염분", "일평균 SST 시계열"])
+
+    with vt1:
+        if hot_imgs:
+            hot_labels = [_date_label(p) for p in hot_imgs]
+
+            if "hot_idx" not in st.session_state:
+                st.session_state.hot_idx = len(hot_imgs) - 1
+
+            nav_l, nav_slider, nav_r = st.columns([1, 8, 1])
+            with nav_l:
+                if st.button("◀", use_container_width=True) and st.session_state.hot_idx > 0:
+                    st.session_state.hot_idx -= 1
+            with nav_r:
+                if st.button("▶", use_container_width=True) and st.session_state.hot_idx < len(hot_imgs) - 1:
+                    st.session_state.hot_idx += 1
+            with nav_slider:
+                st.session_state.hot_idx = st.select_slider(
+                    "날짜",
+                    options=list(range(len(hot_imgs))),
+                    value=st.session_state.hot_idx,
+                    format_func=lambda i: hot_labels[i],
+                    label_visibility="collapsed",
+                )
+
+            idx = st.session_state.hot_idx
+            st.caption(f"28℃ 이상 고수온 구역 · {hot_labels[idx]} · {idx + 1}/{len(hot_imgs)}")
+            _, img_col, _ = st.columns([1, 6, 1])
+            with img_col:
+                st.image(str(hot_imgs[idx]), use_container_width=True)
+        else:
+            st.info("고수온 분포 지도가 없습니다.")
+
+    with vt2:
+        if ss_imgs:
+            ss_labels = [_ss_label(p) for p in ss_imgs]
+
+            if "ss_idx" not in st.session_state:
+                st.session_state.ss_idx = len(ss_imgs) - 1
+
+            sl, ss_slider, sr = st.columns([1, 8, 1])
+            with sl:
+                if st.button("◀", key="ss_prev", use_container_width=True) and st.session_state.ss_idx > 0:
+                    st.session_state.ss_idx -= 1
+            with sr:
+                if st.button("▶", key="ss_next", use_container_width=True) and st.session_state.ss_idx < len(ss_imgs) - 1:
+                    st.session_state.ss_idx += 1
+            with ss_slider:
+                st.session_state.ss_idx = st.select_slider(
+                    "날짜",
+                    options=list(range(len(ss_imgs))),
+                    value=st.session_state.ss_idx,
+                    format_func=lambda i: ss_labels[i],
+                    label_visibility="collapsed",
+                    key="ss_date_slider",
+                )
+
+            sidx = st.session_state.ss_idx
+            st.caption(f"남해 고수온(28℃↑)·저염분(26psu↓) 동시 발생 구역 · {ss_labels[sidx]} · {sidx + 1}/{len(ss_imgs)}")
+            _, sc2, _ = st.columns([1, 6, 1])
+            with sc2:
+                st.image(str(ss_imgs[sidx]), use_container_width=True)
+        else:
+            st.info("남해 고수온·저염분 이미지가 없습니다. (`data/results/HS28NLS26/south_sea/`)")
+
+    with vt3:
+        if ts_imgs:
+            _, c2, _ = st.columns([1, 6, 1])
+            with c2:
+                st.image(str(ts_imgs[0]), use_container_width=True)
+        else:
+            st.info("일평균 SST 결과가 없습니다.")

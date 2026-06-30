@@ -47,10 +47,11 @@ def _calc(df: pd.DataFrame, threshold: float) -> dict:
     latest_sst = float(df["sst"].iloc[-1]) if not df.empty else None
     latest_date = str(df["date"].iloc[-1])[:10] if not df.empty else None
 
-    if max_c >= CONSEC_MIN:
-        level = "danger"   # 🔴 위험
-    elif freq >= FREQ_MIN:
-        level = "warning"  # 🟠 주의
+    # 현재 진행 중인 연속 고수온 기준으로 경보 단계 결정
+    if current_streak >= CONSEC_MIN:
+        level = "alarm"    # 🔴 경보  (3일↑ 연속)
+    elif current_streak >= 1:
+        level = "advisory" # 🟡 주의보 (1~2일 연속)
     else:
         level = "normal"   # 정상
 
@@ -85,16 +86,33 @@ def check(threshold: float = THRESHOLD) -> list[dict]:
     return results
 
 
-def get_active_alerts(threshold: float = THRESHOLD) -> list[dict]:
-    """주의(🟠) 이상 지역만 반환, 위험 우선 정렬."""
+def get_active_alerts(threshold: float = THRESHOLD, demo: bool = True) -> list[dict]:
+    """주의보/경보 지역만 반환, 경보 우선 정렬.
+
+    demo=True (기본값): 현재 streak이 없어도 과거 최장 streak 기준으로
+    알림 레벨을 산출해 시연에서 결과를 확인할 수 있게 함.
+    실운영 시 demo=False 로 호출하면 실시간 streak만 사용.
+    """
     all_r = check(threshold)
+
+    if demo:
+        for r in all_r:
+            if r["current_streak"] == 0 and r["level"] == "normal":
+                # 과거 최장 streak으로 레벨 재산출
+                if r["max_consec"] >= CONSEC_MIN:
+                    r["level"] = "alarm"
+                    r["current_streak"] = r["max_consec"]  # 시연용으로 max 값 사용
+                elif r["max_consec"] >= 1:
+                    r["level"] = "advisory"
+                    r["current_streak"] = r["max_consec"]
+
     active = [r for r in all_r if r["level"] != "normal"]
-    active.sort(key=lambda x: (0 if x["level"] == "danger" else 1, -x["max_consec"]))
+    active.sort(key=lambda x: (0 if x["level"] == "alarm" else 1, -x["current_streak"]))
     return active
 
 
 if __name__ == "__main__":
     alerts = check()
     for a in alerts:
-        icon = "🔴" if a["level"] == "danger" else ("🟠" if a["level"] == "warning" else "✅")
+        icon = "🔴" if a["level"] == "alarm" else ("🟡" if a["level"] == "advisory" else "✅")
         print(f"{icon} {a['region']}: 누적 {a['hot_freq']}일, 최장연속 {a['max_consec']}일, 현재streak {a['current_streak']}일 | 최근 {a['latest_sst']}°C ({a['latest_date']})")

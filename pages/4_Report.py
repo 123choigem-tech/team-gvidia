@@ -119,20 +119,3 @@ if "report_result" in st.session_state:
             use_container_width=True,
         )
 
-st.markdown("---")
-st.subheader("생성된 보고서 파일")
-existing = sorted(SUMMARY_DIR.glob("report_*.*"), reverse=True) if SUMMARY_DIR.exists() else []
-if existing:
-    for f in existing[:10]:
-        cols = st.columns([4, 1])
-        cols[0].write(f"{f.name} ({f.stat().st_size // 1024} KB)")
-        cols[1].download_button(
-            "다운로드",
-            f.read_bytes(),
-            file_name=f.name,
-            mime="application/pdf" if f.suffix == ".pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            key=f.name,
-            use_container_width=True,
-        )
-else:
-    st.info("생성된 보고서가 아직 없습니다.")

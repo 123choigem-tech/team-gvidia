@@ -132,6 +132,7 @@ def _build_docx(
     narrative: str,
     threshold: float,
     top_n: int,
+    freq_df: pd.DataFrame | None = None,
 ) -> bytes:
     from docx import Document
     from docx.shared import Inches, Pt
@@ -161,7 +162,7 @@ def _build_docx(
         "consec_map": lambda: _docx_image(doc, sorted(SST_PERS_DIR.glob("SST_MAXCONSEC*.png")),
                                           "최장 연속 분포 지도 (3일↑)"),
         "sst_stats": lambda: _docx_sst_stats(doc, sst_stat_df),
-        "news": lambda: _docx_news(doc, news_df, top_n),
+        "news": lambda: _docx_news(doc, news_df, top_n, freq_df),
     }
 
     for sec in sections:
@@ -231,7 +232,21 @@ def _docx_sst_stats(doc, sst_stat_df):
     doc.add_paragraph()
 
 
-def _docx_news(doc, news_df, top_n):
+def _docx_news(doc, news_df, top_n, freq_df: pd.DataFrame | None = None):
+    doc.add_heading("뉴스 기반 지역 언급 빈도", 1)
+    if freq_df is not None and not freq_df.empty:
+        doc.add_paragraph("뉴스 크롤링에서 집계된 지역별 언급 횟수입니다.")
+        show = freq_df.sort_values("count", ascending=False).head(15)
+        t = doc.add_table(rows=1, cols=3, style="Table Grid")
+        for i, h in enumerate(["지역", "언급 횟수", "위도/경도"]):
+            t.rows[0].cells[i].text = h
+        for _, r in show.iterrows():
+            row = t.add_row().cells
+            row[0].text = str(r["location"])
+            row[1].text = str(r["count"])
+            row[2].text = f"{r.get('lat', '')} / {r.get('lon', '')}"
+        doc.add_paragraph()
+
     doc.add_heading(f"주요 재난 뉴스 (최근 {top_n}건)", 1)
     recent = news_df.sort_values("date", ascending=False).head(top_n)
     t = doc.add_table(rows=1, cols=3, style="Table Grid")
@@ -256,6 +271,7 @@ def _build_pdf(
     narrative: str,
     threshold: float,
     top_n: int,
+    freq_df: pd.DataFrame | None = None,
 ) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -385,6 +401,15 @@ def _build_pdf(
             story.append(Spacer(1, 4*mm))
 
         elif sec == "news":
+            if freq_df is not None and not freq_df.empty:
+                story.append(Paragraph("뉴스 기반 지역 언급 빈도 (상위 15개 지역)", h2))
+                show = freq_df.sort_values("count", ascending=False).head(15)
+                tdata = [["지역", "언급 횟수"]]
+                for _, r in show.iterrows():
+                    tdata.append([str(r["location"]), str(r["count"])])
+                story.append(_table(tdata, [100*mm, 70*mm]))
+                story.append(Spacer(1, 4*mm))
+
             story.append(Paragraph(f"주요 재난 뉴스 (최근 {top_n}건)", h2))
             recent = news_df.sort_values("date", ascending=False).head(top_n)
             tdata  = [["날짜", "지역", "제목"]]
@@ -444,6 +469,7 @@ def run(
     news_df        = _load_news()
     _, sst_stat_df = _load_sst_frames(threshold)
     ts_df          = _load_timeseries()
+    freq_df        = pd.read_csv(REGION_FREQ, encoding="utf-8") if REGION_FREQ.exists() else None
 
     narrative = ""
     if use_ai:
@@ -462,7 +488,7 @@ def run(
     if fmt in ("docx", "both"):
         print("[report_agent] Word 생성 중...")
         docx_bytes = _build_docx(title, sections, news_df, sst_stat_df,
-                                 ts_df, narrative, threshold, top_n_regions)
+                                 ts_df, narrative, threshold, top_n_regions, freq_df)
         entry: dict = {"bytes": docx_bytes, "path": None}
         if output_dir:
             out_dir = Path(output_dir)
@@ -476,7 +502,7 @@ def run(
     if fmt in ("pdf", "both"):
         print("[report_agent] PDF 생성 중...")
         pdf_bytes = _build_pdf(title, sections, news_df, sst_stat_df,
-                               ts_df, narrative, threshold, top_n_regions)
+                               ts_df, narrative, threshold, top_n_regions, freq_df)
         entry = {"bytes": pdf_bytes, "path": None}
         if output_dir:
             out_dir = Path(output_dir)

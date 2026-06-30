@@ -7,7 +7,6 @@ from pathlib import Path
 from utils.style import apply
 from utils.chat_widget import inject
 from utils.alert_widget import inject_alerts
-from utils.viz import make_hotlowsal_heatmap
 from utils.region_extractor import load_disaster_events, extract_regions
 from agents.alert_agent import get_active_alerts
 

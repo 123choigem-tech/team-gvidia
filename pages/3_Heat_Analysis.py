@@ -7,6 +7,7 @@ from pathlib import Path
 from utils.style import apply
 from utils.chat_widget import inject
 from utils.alert_widget import inject_alerts
+from utils.region_extractor import load_disaster_events, extract_regions
 from agents.alert_agent import get_active_alerts
 
 st.set_page_config(page_title="Heat Analysis", page_icon="🌡️", layout="wide")
@@ -18,14 +19,38 @@ st.title("🌡️ Heat Analysis — 해수면온도 분석")
 
 DATA_DIR = Path("data")
 DEFAULT_THRESHOLD = 28.0
-CONSEC_MIN = 3   # 연속 고수온 기준일 (sst_persistence.py 와 동일)
-FREQ_MIN   = 2   # 누적 빈도 기준일  (sst_frequency.py 와 동일)
+CONSEC_MIN = 3
+FREQ_MIN   = 2
 
 
-# ── 데이터 로드 ──────────────────────────────────────────
+# ── 크롤링 기반 관심지역 로드 ────────────────────────────
+@st.cache_data(ttl=300)
+def load_crawl_regions() -> pd.DataFrame:
+    df = load_disaster_events()
+    return extract_regions(df)
+
+crawl_regions = load_crawl_regions()
+
+# 크롤링 지역 → SST 수집 대상 연결 안내
+with st.expander("📰 분석 대상 지역 — 뉴스 크롤링 기반", expanded=False):
+    st.caption("고수온 관련 뉴스에서 추출된 관심지역입니다. 이 지역들의 해수면온도(SST)를 분석합니다.")
+    if not crawl_regions.empty:
+        top = crawl_regions.sort_values("count", ascending=False).head(15)
+        fig_r = px.bar(top, x="count", y="location", orientation="h",
+                       labels={"count": "뉴스 언급 횟수", "location": "지역"},
+                       color="count", color_continuous_scale="teal")
+        fig_r.update_layout(height=350, margin=dict(t=10, b=10),
+                            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                            font_color="#c8e6f0", showlegend=False)
+        st.plotly_chart(fig_r, use_container_width=True)
+
+st.markdown("---")
+
+# ── SST 데이터 로드 (크롤링 지역 대상으로 수집된 것) ─────
 @st.cache_data
 def load_all_sst() -> dict[str, pd.DataFrame]:
     result = {}
+    crawl_locs = set(crawl_regions["location"].tolist()) if not crawl_regions.empty else set()
     for f in sorted(DATA_DIR.glob("*_2025*.csv")):
         region = f.stem.split("_")[0]
         if region in ("geocode", "regions", "Tongyeong"):
@@ -75,14 +100,26 @@ if not sst_data:
     st.warning("수집된 SST 데이터가 없습니다. `scripts/collect_sst_by_region.py` 를 먼저 실행하세요.")
     st.stop()
 
-regions = list(sst_data.keys())
+# 크롤링 빈도 순으로 지역 정렬
+crawl_order = crawl_regions.sort_values("count", ascending=False)["location"].tolist()
+regions = sorted(sst_data.keys(), key=lambda r: crawl_order.index(r) if r in crawl_order else 999)
 
 # ── 사이드바 ──────────────────────────────────────────────
 with st.sidebar:
     st.subheader("필터")
+    st.caption("뉴스 언급 빈도 순 정렬")
     selected = st.multiselect("분석 지역", regions, default=regions)
     threshold = st.slider("고수온 기준 (°C)", 24.0, 32.0, DEFAULT_THRESHOLD, 0.5)
     st.caption(f"누적 기준: {FREQ_MIN}일↑ / 연속 기준: {CONSEC_MIN}일↑")
+
+    # 지역별 뉴스 언급 수 표시
+    if not crawl_regions.empty:
+        st.markdown("---")
+        st.caption("📰 뉴스 언급 횟수")
+        for r in selected:
+            row = crawl_regions[crawl_regions["location"] == r]
+            cnt = int(row["count"].values[0]) if not row.empty else 0
+            st.caption(f"  {r}: {cnt}건")
 
 if not selected:
     st.info("왼쪽에서 지역을 하나 이상 선택하세요.")

@@ -33,36 +33,11 @@ def load_data():
 
 news_df, freq_df = load_data()
 
-col1, col2, col3, col4 = st.columns(4)
-top_region = news_df["location"].value_counts().index[0] if not news_df.empty else "-"
-col1.metric("최다 언급 지역", top_region)
-col2.metric("전체 기사", f"{len(news_df):,}건")
-col3.metric("지역 수", f"{news_df['location'].nunique():,}개")
-col4.metric("생성 시각", datetime.now().strftime("%H:%M"))
-
-st.markdown("---")
-
-left, right = st.columns([1.2, 0.8])
-with left:
-    st.subheader("기사 요약")
-    st.dataframe(
-        news_df.sort_values("date", ascending=False)[["date", "location", "keyword", "title"]].head(20),
-        use_container_width=True,
-        height=420,
-    )
-with right:
-    st.subheader("지역 빈도")
-    if not freq_df.empty:
-        st.dataframe(freq_df.sort_values("count", ascending=False).head(10), use_container_width=True, height=420)
-    else:
-        st.info("지역 빈도 파일이 없습니다.")
-
-st.markdown("---")
 st.subheader("보고서 생성")
 
 col_a, col_b = st.columns([1, 1])
 with col_a:
-    title = st.text_input("보고서 제목", value="예보사업부 AI·AX 해커톤 보고서")
+    title = st.text_input("보고서 제목", value="2025년 하절기 고수온 연안재해 분석 보고서")
     threshold = st.slider("고수온 기준(℃)", 24.0, 32.0, 28.0, 0.5)
     top_n = st.slider("기사 포함 개수", 5, 50, 20, 5)
 with col_b:

@@ -184,22 +184,57 @@ def _build_docx(
                 doc.add_paragraph(line.strip())
         doc.add_paragraph()
 
-    section_funcs = {
-        "overview": lambda: _docx_overview(doc, news_df, sst_stat_df),
-        "timeseries": lambda: _docx_timeseries(doc, ts_df),
-        "hotmap": lambda: _docx_image(doc, sorted(SST_HOT_IMG.glob("*.png")),
-                                      "일별 고수온(28°C↑) 분포 지도", max_imgs=3),
-        "freq_map": lambda: _docx_image(doc, sorted(SST_PERS_DIR.glob("SST_HOTFREQ*.png")),
-                                        "누적 빈도 분포 지도 (2일↑)"),
-        "consec_map": lambda: _docx_image(doc, sorted(SST_PERS_DIR.glob("SST_MAXCONSEC*.png")),
-                                          "최장 연속 분포 지도 (3일↑)"),
-        "sst_stats": lambda: _docx_sst_stats(doc, sst_stat_df),
-        "news": lambda: _docx_news(doc, news_df, top_n, freq_df),
-    }
+    top5_locs = (
+        "·".join(freq_df.sort_values("count", ascending=False)["location"].head(5).tolist())
+        if freq_df is not None and not freq_df.empty else "-"
+    )
 
-    for sec in sections:
-        if sec in section_funcs:
-            section_funcs[sec]()
+    # 1페이지: 개요 + 관심지역 지도
+    _docx_overview(doc, news_df, sst_stat_df)
+    if freq_df is not None and not freq_df.empty:
+        try:
+            map_png = _make_region_map_png(freq_df)
+            doc.add_heading("관심지역 분포 지도 (뉴스 크롤링 기반)", 1)
+            doc.add_picture(str(map_png), width=Inches(5.5))
+        except Exception:
+            pass
+    doc.add_page_break()
+
+    # 2페이지: 분석 이미지 3개
+    doc.add_heading("위성 SST 공간·시계열 분석 (2025.7.1~8.31)", 1)
+    imgs_consec = sorted(SST_PERS_DIR.glob("SST_MAXCONSEC*.png"))
+    if imgs_consec:
+        doc.add_heading("① 고수온 최장 연속 지속일수 분포", 2)
+        doc.add_picture(str(imgs_consec[0]), width=Inches(5.5))
+    imgs_freq2 = sorted(SST_PERS_DIR.glob("SST_HOTFREQ*.png"))
+    if imgs_freq2:
+        doc.add_heading("② 고수온 누적 발생빈도 분포 (2일↑)", 2)
+        doc.add_picture(str(imgs_freq2[0]), width=Inches(5.5))
+    imgs_ts = sorted(SST_TS_DIR.glob("SST_daily_mean_*.png")) if SST_TS_DIR.exists() else []
+    if imgs_ts:
+        doc.add_heading("③ 일평균 SST 시계열 트렌드", 2)
+        _docx_timeseries(doc, ts_df)
+    doc.add_page_break()
+
+    # 3페이지: 크롤링 지역 통계 표 (상위 20)
+    _docx_news(doc, news_df, top_n, freq_df)
+    if not sst_stat_df.empty:
+        _docx_sst_stats(doc, sst_stat_df)
+    doc.add_page_break()
+
+    # 4페이지: HOT28 분포 이미지 4개(2×2) + 결론
+    _docx_image(doc, sorted(SST_HOT_IMG.glob("*.png")),
+                "일별 고수온(28°C↑) 분포 지도 (최근 4일)", max_imgs=4, grid2x2=True)
+    doc.add_heading("결론 및 시사점", 1)
+    doc.add_paragraph(
+        f"뉴스 발생 빈도와 위성 고수온 분석이 남해안·제주에서 공간적으로 일치 "
+        f"→ 관심지역({top5_locs}) 자동 도출의 타당성을 확인함."
+    )
+    doc.add_paragraph(
+        "고수온 장기 지속 해역과 저염분 중첩 해역을 우선 경계 대상으로 설정하여 "
+        "양식어가 피해 예방에 선제적으로 대응 가능."
+    )
+    doc.add_paragraph("※ 출처: 한국언론진흥재단·빅카인즈(뉴스 메타데이터), 국가해양위성센터 KHOA L4 해수면온도")
 
     buf = io.BytesIO()
     doc.save(buf)

@@ -25,4 +25,8 @@
 --- 2026-06-30 19:20 KST 업데이트 ---
 - 2026-06-30 19:20     submit/gvidia_jiny_PROCESS_LOG.md  (#7~#9 항목 추가, main 브랜치 반영)
 - 2026-06-30 19:20     submit/BEFORE_AFTER.md  (Before/After 상세 기재: 4~6h → 3~5min)
+- 2026-06-30 22:26     submit/assets/README.md
+- 2026-06-30 22:26     submit/assets/reusable_scripts.md
+- 2026-06-30 22:26     submit/assets/prompt_pack.md
+- 2026-06-30 22:26     submit/assets/project_notes.md
 - 2026-06-30 19:20     submit/evidence/timestamps.txt  (갱신)

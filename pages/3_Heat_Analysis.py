@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -19,6 +20,8 @@ st.title("🌡️ 해수면온도 분석")
 st.caption("실제 수집된 SST CSV로 지역별 고수온 추세를 비교합니다.")
 
 DATA_DIR = Path("data")
+HOT28_DIR = Path("data/results/sst_analysis/sst_over28/img")
+TS_MEAN_IMG = Path("data/results/sst_analysis/timeseries/SST_daily_mean_20250701_20250831.png")
 DEFAULT_THRESHOLD = 28.0
 CONSEC_MIN = 3
 FREQ_MIN = 2
@@ -41,6 +44,20 @@ def load_sst_by_region() -> dict[str, pd.DataFrame]:
         if {"date", "sst", "source"}.issubset(df.columns) and df["source"].iloc[0] == "KHOA_OPeNDAP":
             result[region] = df.sort_values("date").reset_index(drop=True)
     return result
+
+
+@st.cache_data(ttl=300)
+def load_hot28_images() -> dict[str, Path]:
+    """일자(YYYY-MM-DD) → 28℃ 초과 공간분포 PNG 경로."""
+    out: dict[str, Path] = {}
+    if not HOT28_DIR.exists():
+        return out
+    for p in sorted(HOT28_DIR.glob("*_HOT28.png")):
+        m = re.search(r"_U(\d{8})_HOT28", p.name)
+        if m:
+            d = m.group(1)
+            out[f"{d[:4]}-{d[4:6]}-{d[6:8]}"] = p
+    return out
 
 
 def calc_hot_stats(df: pd.DataFrame, threshold: float) -> dict:
@@ -91,7 +108,7 @@ flags[1].warning(f"연속 {CONSEC_MIN}일 이상 지역: {sum(1 for r in selecte
 
 st.markdown("---")
 
-tab1, tab2, tab3 = st.tabs(["추세", "빈도", "원본"])
+tab1, tab2, tab_dist, tab3 = st.tabs(["추세", "빈도", "고수온 공간분포", "원본"])
 
 with tab1:
     st.subheader("일별 SST 추이")
@@ -109,6 +126,17 @@ with tab1:
         legend=dict(orientation="h", y=-0.2),
     )
     st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("**전체 해역 일평균 SST 시계열** (domain-mean · domain-max)")
+    if TS_MEAN_IMG.exists():
+        st.image(
+            str(TS_MEAN_IMG),
+            caption="KHOA SST domain-mean 일별 시계열 (2025-07-01 ~ 2025-08-31)",
+            use_container_width=True,
+        )
+    else:
+        st.info("일평균 SST 시계열 이미지가 없습니다. (data/results/sst_analysis/timeseries)")
 
 with tab2:
     st.subheader("관심 지역 언급 빈도")
@@ -132,6 +160,27 @@ with tab2:
         st.plotly_chart(fig2, use_container_width=True)
     else:
         st.info("지역 빈도 파일이 없습니다.")
+
+with tab_dist:
+    st.subheader("고수온 공간분포 (28℃ 초과 일별)")
+    hot28 = load_hot28_images()
+    if not hot28:
+        st.info("28℃ 초과 공간분포 이미지가 없습니다. (data/results/sst_analysis/sst_over28/img)")
+    else:
+        dates = list(hot28.keys())
+        default_date = "2025-07-19" if "2025-07-19" in hot28 else dates[len(dates) // 2]
+        sel_date = st.select_slider(
+            "날짜 선택",
+            options=dates,
+            value=default_date,
+            help="슬라이더를 움직여 일자별 28℃ 초과 해역 분포를 확인하세요.",
+        )
+        st.image(
+            str(hot28[sel_date]),
+            caption=f"{sel_date} · SST 28℃ 초과 공간분포",
+            use_container_width=True,
+        )
+        st.caption(f"총 {len(dates)}일 ({dates[0]} ~ {dates[-1]}) · 28℃ 이상 격자를 강조한 일별 지도")
 
 with tab3:
     st.subheader("원본 SST 데이터")

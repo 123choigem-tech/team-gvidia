@@ -6,10 +6,13 @@ import plotly.express as px
 from pathlib import Path
 from utils.style import apply
 from utils.chat_widget import inject
+from utils.alert_widget import inject_alerts
+from agents.alert_agent import get_active_alerts
 
 st.set_page_config(page_title="Heat Analysis", page_icon="🌡️", layout="wide")
 apply()
 inject()
+inject_alerts(get_active_alerts())
 
 st.title("🌡️ Heat Analysis — 해수면온도 분석")
 

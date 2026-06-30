@@ -66,26 +66,48 @@ with col_a:
     threshold = st.slider("고수온 기준(℃)", 24.0, 32.0, 28.0, 0.5)
     top_n = st.slider("기사 포함 개수", 5, 50, 20, 5)
 with col_b:
-    fmt = st.radio("출력 형식", ["both", "docx", "pdf"], horizontal=True)
+    fmt = st.radio("출력 형식", ["both", "docx", "pdf", "hwpx"], horizontal=True)
     use_ai = st.checkbox("AI 서술 포함", value=True)
-    st.caption("보고서 생성 agent는 `agents.report_agent.run()`을 직접 호출합니다.")
+    st.caption("hwpx 선택 시 geosr-hwpx 스킬이 설치된 경우에만 생성됩니다.")
 
 selected_sections = ["overview", "timeseries", "hotmap", "freq_map", "consec_map", "sst_stats", "news"]
 
 if st.button("보고서 생성", type="primary", use_container_width=True):
     try:
-        from agents.report_agent import run as report_run
+        with st.spinner("보고서 생성 중..."):
+            result = {"docx": None, "pdf": None, "hwpx": None, "filename_stem": "report"}
 
-        with st.spinner("보고서 생성 agent 실행 중..."):
-            result = report_run(
-                title=title,
-                threshold=threshold,
-                include_sections=selected_sections,
-                top_n_regions=top_n,
-                fmt=fmt,
-                output_dir=str(SUMMARY_DIR),
-                use_ai=use_ai,
-            )
+            if fmt in ("docx", "pdf", "both"):
+                from agents.report_agent import run as report_run
+                r = report_run(
+                    title=title,
+                    threshold=threshold,
+                    include_sections=selected_sections,
+                    top_n_regions=top_n,
+                    fmt=fmt,
+                    output_dir=str(SUMMARY_DIR),
+                    use_ai=use_ai,
+                )
+                result.update(r)
+
+            if fmt == "hwpx":
+                import sys, importlib.util
+                sys.path.insert(0, str(Path.home() / ".claude/skills/geosr-hwpx/scripts"))
+                try:
+                    spec = importlib.util.spec_from_file_location(
+                        "build_hwpx_report", Path("scripts/build_hwpx_report.py")
+                    )
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    hwpx_bytes = mod._build_hwpx_bytes(title)
+                    out_path = SUMMARY_DIR / f"{result['filename_stem']}.hwpx"
+                    SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
+                    out_path.write_bytes(hwpx_bytes)
+                    result["hwpx"] = {"bytes": hwpx_bytes, "path": str(out_path)}
+                except ImportError:
+                    st.warning("geosr-hwpx 스킬이 설치되지 않아 HWPX를 생성할 수 없습니다. "
+                               "`python geosr-hwpx/install.py --force`를 먼저 실행하세요.")
+
         st.session_state["report_result"] = result
         st.success("보고서 생성이 완료되었습니다.")
     except Exception as e:
@@ -96,10 +118,10 @@ if "report_result" in st.session_state:
     stem = result.get("filename_stem", "report")
     st.markdown("---")
     st.subheader("다운로드")
-    d1, d2 = st.columns(2)
+    d1, d2, d3 = st.columns(3)
     if result.get("docx") and result["docx"].get("bytes"):
         d1.download_button(
-            "Word 다운로드",
+            "⬇ Word (.docx)",
             result["docx"]["bytes"],
             file_name=f"{stem}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -107,10 +129,18 @@ if "report_result" in st.session_state:
         )
     if result.get("pdf") and result["pdf"].get("bytes"):
         d2.download_button(
-            "PDF 다운로드",
+            "⬇ PDF",
             result["pdf"]["bytes"],
             file_name=f"{stem}.pdf",
             mime="application/pdf",
+            use_container_width=True,
+        )
+    if result.get("hwpx") and result["hwpx"].get("bytes"):
+        d3.download_button(
+            "⬇ 한글 (.hwpx)",
+            result["hwpx"]["bytes"],
+            file_name=f"{stem}.hwpx",
+            mime="application/octet-stream",
             use_container_width=True,
         )
 

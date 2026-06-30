@@ -22,8 +22,8 @@ DATA_DIR = Path("data")
 DEFAULT_THRESHOLD = 28.0
 CONSEC_MIN = 3
 FREQ_MIN = 2
-TS_DIR = Path("data/sst/timeseries")
-HOT_IMG_DIR = Path("data/sst/hot/img")
+TS_DIR = Path("data/results/sst_analysis/timeseries")
+HOT_IMG_DIR = Path("data/results/sst_analysis/sst_over28/img")
 
 
 @st.cache_data(ttl=300)

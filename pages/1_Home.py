@@ -66,6 +66,7 @@ sst_count = f"{s['sst_count']:,}건" if s["sst_count"] else "없음"
 hot_count = f"{len(s['hot_regions'])}개" if s["hot_regions"] else "없음"
 last_updated = s["last_updated"] or "미확인"
 
+
 hero(
     "고수온 연안재해 AI·AX 대시보드",
     "관심지역 수집, 고수온 분석, 보고서 생성을 한 화면에서 연결하는 운영 대시보드입니다.",
@@ -112,38 +113,26 @@ with right:
 section("바로가기", "🧭")
 g1, g2, g3 = st.columns(3)
 with g1:
-    st.markdown(
-        """
-<div class="ocean-card" style="height:190px;">
-  <div style="font-size:28px;margin-bottom:10px;">📰</div>
-  <div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">재난 지역 분석</div>
-  <div style="font-size:12px;color:#7aacbf;line-height:1.6;">지역별 기사 분포와 관심 지역을 지도와 표로 확인합니다.</div>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="ocean-card" style="height:190px;">', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:28px;margin-bottom:10px;">📰</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">재난 지역 분석</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:12px;color:#7aacbf;line-height:1.6;margin-bottom:16px;">지역별 기사 분포와 관심 지역을 지도와 표로 확인합니다.</div>', unsafe_allow_html=True)
+    st.page_link("pages/2_Disaster_Areas.py", label="열기", icon="➡️")
+    st.markdown('</div>', unsafe_allow_html=True)
 with g2:
-    st.markdown(
-        """
-<div class="ocean-card" style="height:190px;">
-  <div style="font-size:28px;margin-bottom:10px;">🌡️</div>
-  <div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">수온 시계열</div>
-  <div style="font-size:12px;color:#7aacbf;line-height:1.6;">지역 SST를 인터랙티브 그래프로 보고 기간별 추세를 비교합니다.</div>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="ocean-card" style="height:190px;">', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:28px;margin-bottom:10px;">🌡️</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">수온 시계열</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:12px;color:#7aacbf;line-height:1.6;margin-bottom:16px;">지역 SST를 인터랙티브 그래프로 보고 기간별 추세를 비교합니다.</div>', unsafe_allow_html=True)
+    st.page_link("pages/5_SST_Timeseries.py", label="열기", icon="➡️")
+    st.markdown('</div>', unsafe_allow_html=True)
 with g3:
-    st.markdown(
-        """
-<div class="ocean-card" style="height:190px;">
-  <div style="font-size:28px;margin-bottom:10px;">📄</div>
-  <div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">보고서</div>
-  <div style="font-size:12px;color:#7aacbf;line-height:1.6;">보고서 페이지에서 분석 문서를 생성하고 내려받을 수 있습니다.</div>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="ocean-card" style="height:190px;">', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:28px;margin-bottom:10px;">📄</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">보고서</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:12px;color:#7aacbf;line-height:1.6;margin-bottom:16px;">보고서 페이지에서 분석 문서를 생성하고 내려받을 수 있습니다.</div>', unsafe_allow_html=True)
+    st.page_link("pages/4_Report.py", label="열기", icon="➡️")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 section("운영 팁", "✨")
 st.markdown(

@@ -149,12 +149,12 @@ if submitted:
         result_ph.markdown(
             f"""
 <div class="ocean-card" style="border-color:rgba(0,168,150,0.4);padding:18px 24px;">
-  <div style="font-size:13px;font-weight:700;color:#00a896;margin-bottom:10px;">업데이트 완료</div>
+  <div style="font-size:13px;font-weight:700;color:#2a9ec5;margin-bottom:10px;">업데이트 완료</div>
   <div style="display:flex;gap:32px;flex-wrap:wrap;">
     <div><span style="color:#7aacbf;font-size:11px;">뉴스</span><br><span style="color:#00e5ff;font-weight:700;font-size:18px;">{n_news}건</span></div>
     <div><span style="color:#7aacbf;font-size:11px;">관심 지역</span><br><span style="color:#00e5ff;font-weight:700;font-size:18px;">{len(regions_df)}개</span></div>
     <div><span style="color:#7aacbf;font-size:11px;">수온 수집</span><br><span style="color:#00e5ff;font-weight:700;font-size:18px;">{ok_n}개 지역</span></div>
-    <div><span style="color:#7aacbf;font-size:11px;">경보 현황</span><br><span style="color:#ffb86b;font-weight:700;font-size:18px;">경보 {alarm_n} · 주의보 {advisory_n}</span></div>
+    <div><span style="color:#7aacbf;font-size:11px;">경보 현황</span><br><span style="color:#7fe3d6;font-weight:700;font-size:18px;">경보 {alarm_n} · 주의보 {advisory_n}</span></div>
   </div>
 </div>
 """,

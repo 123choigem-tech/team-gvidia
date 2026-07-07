@@ -97,6 +97,8 @@ section.main .block-container {
 .stForm button[kind="primary"],
 .stForm button[kind="secondary"] {
     background: linear-gradient(135deg, #114e7a, #2a9ec5) !important;
+    color: white !important;
+    border: 1px solid rgba(98, 186, 214, 0.28) !important;
 }
 .stMultiSelect [data-baseweb="tag"],
 .stMultiSelect [data-baseweb="tag"] > div,
@@ -111,6 +113,15 @@ section.main .block-container {
 }
 .stMultiSelect [data-baseweb="tag"] svg {
     fill: #d7f3ff !important;
+}
+.stMultiSelect [data-baseweb="tag"] [data-baseweb="tag"],
+.stMultiSelect [data-baseweb="tag"] span,
+.stMultiSelect [data-baseweb="tag"] div {
+    color: #d7f3ff !important;
+}
+.stMultiSelect [data-baseweb="tag"] button {
+    background: transparent !important;
+    color: #d7f3ff !important;
 }
 
 /* 데이터프레임 */

@@ -113,26 +113,44 @@ with right:
 section("바로가기", "🧭")
 g1, g2, g3 = st.columns(3)
 with g1:
-    st.markdown('<div class="ocean-card" style="height:190px;">', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:28px;margin-bottom:10px;">📰</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">재난 지역 분석</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:12px;color:#7aacbf;line-height:1.6;margin-bottom:14px;">지역별 기사 분포와 관심 지역을 지도와 표로 확인합니다.</div>', unsafe_allow_html=True)
-    st.page_link("pages/2_Disaster_Areas.py", label="재난 지역 분석으로 이동", icon="➡️")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+<a href="?page=pages/2_Disaster_Areas.py" style="text-decoration:none;">
+  <div class="ocean-card" style="height:190px; cursor:pointer;">
+    <div style="font-size:28px;margin-bottom:10px;">📰</div>
+    <div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">재난 지역 분석</div>
+    <div style="font-size:12px;color:#7aacbf;line-height:1.6;">지역별 기사 분포와 관심 지역을 지도와 표로 확인합니다.</div>
+  </div>
+</a>
+""",
+        unsafe_allow_html=True,
+    )
 with g2:
-    st.markdown('<div class="ocean-card" style="height:190px;">', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:28px;margin-bottom:10px;">🌡️</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">수온 시계열</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:12px;color:#7aacbf;line-height:1.6;margin-bottom:14px;">지역 SST를 인터랙티브 그래프로 보고 기간별 추세를 비교합니다.</div>', unsafe_allow_html=True)
-    st.page_link("pages/5_SST_Timeseries.py", label="수온 시계열로 이동", icon="➡️")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+<a href="?page=pages/5_SST_Timeseries.py" style="text-decoration:none;">
+  <div class="ocean-card" style="height:190px; cursor:pointer;">
+    <div style="font-size:28px;margin-bottom:10px;">🌡️</div>
+    <div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">수온 시계열</div>
+    <div style="font-size:12px;color:#7aacbf;line-height:1.6;">지역 SST를 인터랙티브 그래프로 보고 기간별 추세를 비교합니다.</div>
+  </div>
+</a>
+""",
+        unsafe_allow_html=True,
+    )
 with g3:
-    st.markdown('<div class="ocean-card" style="height:190px;">', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:28px;margin-bottom:10px;">📄</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">보고서</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:12px;color:#7aacbf;line-height:1.6;margin-bottom:14px;">보고서 페이지에서 분석 문서를 생성하고 내려받을 수 있습니다.</div>', unsafe_allow_html=True)
-    st.page_link("pages/4_Report.py", label="보고서로 이동", icon="➡️")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+<a href="?page=pages/4_Report.py" style="text-decoration:none;">
+  <div class="ocean-card" style="height:190px; cursor:pointer;">
+    <div style="font-size:28px;margin-bottom:10px;">📄</div>
+    <div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">보고서</div>
+    <div style="font-size:12px;color:#7aacbf;line-height:1.6;">보고서 페이지에서 분석 문서를 생성하고 내려받을 수 있습니다.</div>
+  </div>
+</a>
+""",
+        unsafe_allow_html=True,
+    )
 
 section("운영 팁", "✨")
 st.markdown(

@@ -91,6 +91,28 @@ section.main .block-container {
     background: linear-gradient(135deg, #114e7a, #2a9ec5) !important;
 }
 
+/* form 버튼과 multiselect chip 톤 조정 */
+.stForm .stButton > button,
+.stForm .stButton > button[kind="primary"],
+.stForm button[kind="primary"],
+.stForm button[kind="secondary"] {
+    background: linear-gradient(135deg, #114e7a, #2a9ec5) !important;
+}
+.stMultiSelect [data-baseweb="tag"],
+.stMultiSelect [data-baseweb="tag"] > div,
+.stMultiSelect [data-baseweb="tag"] button,
+.stMultiSelect [data-baseweb="tag"] span {
+    background: rgba(29, 126, 161, 0.18) !important;
+    color: #d7f3ff !important;
+    border-color: rgba(138, 215, 240, 0.35) !important;
+}
+.stMultiSelect [data-baseweb="tag"]:hover {
+    background: rgba(29, 126, 161, 0.26) !important;
+}
+.stMultiSelect [data-baseweb="tag"] svg {
+    fill: #d7f3ff !important;
+}
+
 /* 데이터프레임 */
 [data-testid="stDataFrame"] {
     background: var(--panel);

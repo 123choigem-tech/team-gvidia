@@ -76,19 +76,19 @@ section.main .block-container {
 .stButton > button {
     border-radius: 12px;
     font-weight: 700;
-    background: linear-gradient(135deg, #005f6e, #00a896);
+    background: linear-gradient(135deg, #0a4b78, #1d7ea1);
     color: white !important;
-    border: 1px solid rgba(0,194,212,0.25) !important;
-    box-shadow: 0 4px 16px rgba(0,168,150,0.25);
+    border: 1px solid rgba(98, 186, 214, 0.28) !important;
+    box-shadow: 0 4px 16px rgba(29, 126, 161, 0.24);
     transition: all 0.2s;
 }
 .stButton > button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,168,150,0.35);
-    border-color: var(--cyan) !important;
+    box-shadow: 0 8px 24px rgba(29, 126, 161, 0.34);
+    border-color: #8ad7f0 !important;
 }
 .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #006a7a, #00c2d4) !important;
+    background: linear-gradient(135deg, #114e7a, #2a9ec5) !important;
 }
 
 /* 데이터프레임 */

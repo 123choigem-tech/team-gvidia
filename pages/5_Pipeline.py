@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+import io
+import zipfile
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -10,64 +15,110 @@ from utils.alert_widget import inject_alerts
 from utils.chat_widget import inject
 from utils.style import apply, card, hero, section
 
-st.set_page_config(page_title="Pipeline", page_icon="🌐", layout="wide")
+
+st.set_page_config(page_title="Pipeline", page_icon="🔗", layout="wide")
 apply()
 inject()
 inject_alerts(get_active_alerts())
 
+
+def _load_crawler_articles(keyword: str, limit: int) -> list[dict]:
+    from agents.crawler_collection_agent import _live_crawl
+
+    return _live_crawl(keyword, limit)
+
+
+def _build_download_bundle(report_result: dict | None, context: dict) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        summary_lines = [
+            "# Pipeline Run Summary",
+            f"- keyword: {context['keyword']}",
+            f"- article_limit: {context['article_limit']}",
+            f"- threshold: {context['threshold']}",
+            f"- news_rows: {context.get('news_rows', 0)}",
+            f"- located_regions: {context.get('located_regions', 0)}",
+            f"- saved_sst_regions: {context.get('saved_regions', 0)}",
+            f"- alert_count: {context.get('alert_count', 0)}",
+        ]
+        zf.writestr("summary.md", "\n".join(summary_lines))
+
+        news_df = context.get("news_df")
+        if isinstance(news_df, pd.DataFrame) and not news_df.empty:
+            zf.writestr("news_events.csv", news_df.to_csv(index=False, encoding="utf-8-sig"))
+
+        freq_df = context.get("freq_df")
+        if isinstance(freq_df, pd.DataFrame) and not freq_df.empty:
+            zf.writestr("region_frequency.csv", freq_df.to_csv(index=False, encoding="utf-8-sig"))
+
+        if report_result:
+            for key in ("docx", "pdf"):
+                entry = report_result.get(key)
+                if entry and entry.get("bytes"):
+                    filename = f"{report_result.get('filename_stem', 'report')}.{key}"
+                    zf.writestr(filename, entry["bytes"])
+
+    buffer.seek(0)
+    return buffer.read()
+
+
 hero(
-    "운영 파이프라인",
-    "수집, 분석, 알림, 보고서를 한 번에 실행하는 내부 운영 화면입니다.",
+    "파이프라인 실행",
+    "뉴스 크롤링 → 관심지역 추출 → SST 수집 → 보고서 생성까지 한 번에 실행하는 페이지입니다.",
 )
 
 section("실행 제어", "⚙️")
 with st.container():
-    left, right = st.columns([1.2, 0.8])
+    left, right = st.columns([1.15, 0.85])
     with left:
         st.markdown('<div class="ocean-card">', unsafe_allow_html=True)
         st.markdown("#### 실행 범위")
-        keywords = st.multiselect("관심 키워드", config.DEFAULT_KEYWORDS, default=["고수온"])
-        max_items = st.slider("기사 수", 10, 200, 50, 10)
-        threshold = st.slider("고수온 기준(℃)", 24.0, 32.0, 28.0, 0.5)
+        keyword = st.selectbox(
+            "관심 키워드",
+            options=["고수온", "고수온 양식장", "고수온 적조"],
+            index=0,
+            disabled=True,
+            help="현재 파이프라인은 고수온 키워드로 고정 실행됩니다.",
+        )
+        article_limit = st.selectbox(
+            "기사 수",
+            options=[10, 12, 14, 16, 18, 20],
+            index=5,
+            help="스크롤형 필터 대신 10~20개 범위의 고정 선택만 남겼습니다.",
+        )
+        threshold = st.slider("고수온 기준(°C)", 24.0, 32.0, 28.0, 0.5)
         generate_report = st.checkbox("보고서 자동 생성", value=True)
         st.markdown("</div>", unsafe_allow_html=True)
     with right:
         st.markdown('<div class="ocean-card">', unsafe_allow_html=True)
-        st.markdown("#### 운영 요약")
-        card("수집", "대기", "뉴스 수집 및 위치 매칭", "📥")
-        card("분석", "대기", "SST 수집 및 경보 판정", "📊")
-        card("보고서", "대기", "Word / PDF 생성", "📝")
+        st.markdown("#### 실행 흐름")
+        card("1. 크롤링", "고수온", "관심 키워드 기사 수집", "📰")
+        card("2. API", "SST", "관심지역에 대해 수온 데이터 수집", "🌊")
+        card("3. 다운로드", "ZIP", "결과 파일을 한 번에 묶어 받기", "⬇️")
         st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("---")
 
 if st.button("파이프라인 실행", type="primary", use_container_width=True):
-    with st.spinner("플랫폼 파이프라인을 실행 중입니다."):
-        try:
-            # ── Step 1: 기존 disaster_events.csv에서 지역 추출 ──
-            # (Google RSS는 현재 뉴스만 반환하므로 기수집된 데이터를 사용)
-            from utils.region_extractor import load_disaster_events, extract_regions
+    status = st.status("파이프라인을 실행하는 중입니다.", expanded=True)
+    try:
+        status.write("[1/4] 뉴스 크롤링 및 관심지역 추출")
+        articles = _load_crawler_articles(keyword, article_limit)
+        from agents.crawler_collection_agent import extract_regions_from_articles
 
-            events_df = load_disaster_events()
-            freq_df = extract_regions(events_df)
-            n_news = len(events_df)
-            n_located = freq_df.dropna(subset=["lat", "lon"]).shape[0]
+        regions = extract_regions_from_articles(articles)
+        freq_df = pd.DataFrame(regions)
+        news_df = pd.DataFrame(articles)
+        news_rows = len(news_df)
+        located_regions = int(freq_df.dropna(subset=["lat", "lon"]).shape[0]) if not freq_df.empty else 0
 
-            # ── Step 2: 지역별 SST 수집 (KHOA OPeNDAP, API 키 불필요) ──
-            import sys, importlib.util
-            from datetime import date
+        status.write(f"[2/4] SST 수집 ({located_regions}개 지역)")
+        from scripts.collect_sst_by_region import collect_region
 
-            _spec = importlib.util.spec_from_file_location(
-                "collect_sst_by_region",
-                Path(__file__).parent.parent / "scripts" / "collect_sst_by_region.py",
-            )
-            _mod = importlib.util.module_from_spec(_spec)
-            _spec.loader.exec_module(_mod)
-            collect_region = _mod.collect_region
-
-            regions_df = freq_df.dropna(subset=["lat", "lon"])
-            saved, failed = [], []
-            for _, row in regions_df.iterrows():
+        saved_regions: list[str] = []
+        failed_regions: list[str] = []
+        if not freq_df.empty:
+            for _, row in freq_df.dropna(subset=["lat", "lon"]).iterrows():
                 try:
                     collect_region(
                         region=row["location"],
@@ -77,27 +128,51 @@ if st.button("파이프라인 실행", type="primary", use_container_width=True)
                         end=date(2025, 8, 31),
                         out_dir=config.DATA_DIR,
                     )
-                    saved.append(row["location"])
-                except Exception as e:
-                    failed.append(f"{row['location']}({e})")
+                    saved_regions.append(row["location"])
+                except Exception as exc:
+                    failed_regions.append(f"{row['location']}({exc})")
 
-            # ── Step 3: 경보 판단 ──
-            alerts = get_active_alerts(threshold=threshold)
+        status.write("[3/4] 경보 판단")
+        alerts = get_active_alerts(threshold=threshold)
 
-            # ── Step 4: 보고서 ──
-            report = run_report(threshold=threshold) if generate_report else None
+        report_result = None
+        if generate_report:
+            status.write("[4/4] 보고서 생성")
+            report_result = run_report(threshold=threshold, top_n_regions=article_limit)
 
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("수집 기사", f"{n_news}건")
-            c2.metric("위치 추출", f"{n_located}개 지역")
-            c3.metric("수온 수집", f"{len(saved)}개 지역")
-            c4.metric("경보", f"{sum(1 for a in alerts if a['level'] == 'alarm')}건")
+        download_context = {
+            "keyword": keyword,
+            "article_limit": article_limit,
+            "threshold": threshold,
+            "news_df": news_df,
+            "freq_df": freq_df,
+            "news_rows": news_rows,
+            "located_regions": located_regions,
+            "saved_regions": len(saved_regions),
+            "alert_count": len(alerts),
+        }
+        bundle = _build_download_bundle(report_result, download_context)
 
-            if failed:
-                st.warning(f"수온 수집 실패: {', '.join(failed)}")
-            st.success("파이프라인 실행이 완료되었습니다.")
-            if report:
-                st.session_state["pipeline_report"] = report
-            st.cache_data.clear()
-        except Exception as e:
-            st.error(f"실행 중 오류가 발생했습니다: {e}")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("수집 기사", f"{news_rows}건")
+        c2.metric("지역 추출", f"{located_regions}개")
+        c3.metric("SST 저장", f"{len(saved_regions)}개")
+        c4.metric("경보", f"{len(alerts)}건")
+
+        if failed_regions:
+            st.warning(f"일부 SST 수집 실패: {', '.join(failed_regions[:5])}")
+
+        st.success("파이프라인 실행이 완료되었습니다.")
+        st.download_button(
+            "결과 ZIP 다운로드",
+            data=bundle,
+            file_name=f"pipeline_{keyword}_{article_limit}.zip",
+            mime="application/zip",
+            use_container_width=True,
+        )
+        st.session_state["pipeline_report"] = report_result
+        st.session_state["pipeline_download"] = bundle
+    except Exception as exc:
+        st.error(f"실행 중 오류가 발생했습니다: {exc}")
+    finally:
+        status.update(label="파이프라인 처리 완료", state="complete", expanded=False)

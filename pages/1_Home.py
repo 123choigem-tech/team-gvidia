@@ -113,26 +113,26 @@ with right:
 section("바로가기", "🧭")
 g1, g2, g3 = st.columns(3)
 with g1:
-    st.markdown('<div class="ocean-card" style="height:190px;">', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:28px;margin-bottom:10px;">📰</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">재난 지역 분석</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:12px;color:#7aacbf;line-height:1.6;margin-bottom:16px;">지역별 기사 분포와 관심 지역을 지도와 표로 확인합니다.</div>', unsafe_allow_html=True)
-    st.page_link("pages/2_Disaster_Areas.py", label="열기", icon="➡️")
-    st.markdown('</div>', unsafe_allow_html=True)
+    if st.button(
+        "재난 지역 분석\n지역별 기사 분포와 관심 지역을 지도와 표로 확인합니다.",
+        key="home_link_disaster",
+        use_container_width=True,
+    ):
+        st.switch_page("pages/2_Disaster_Areas.py")
 with g2:
-    st.markdown('<div class="ocean-card" style="height:190px;">', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:28px;margin-bottom:10px;">🌡️</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">수온 시계열</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:12px;color:#7aacbf;line-height:1.6;margin-bottom:16px;">지역 SST를 인터랙티브 그래프로 보고 기간별 추세를 비교합니다.</div>', unsafe_allow_html=True)
-    st.page_link("pages/5_SST_Timeseries.py", label="열기", icon="➡️")
-    st.markdown('</div>', unsafe_allow_html=True)
+    if st.button(
+        "수온 시계열\n지역 SST를 인터랙티브 그래프로 보고 기간별 추세를 비교합니다.",
+        key="home_link_timeseries",
+        use_container_width=True,
+    ):
+        st.switch_page("pages/5_SST_Timeseries.py")
 with g3:
-    st.markdown('<div class="ocean-card" style="height:190px;">', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:28px;margin-bottom:10px;">📄</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:14px;font-weight:700;color:#e8f4f8;margin-bottom:6px;">보고서</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:12px;color:#7aacbf;line-height:1.6;margin-bottom:16px;">보고서 페이지에서 분석 문서를 생성하고 내려받을 수 있습니다.</div>', unsafe_allow_html=True)
-    st.page_link("pages/4_Report.py", label="열기", icon="➡️")
-    st.markdown('</div>', unsafe_allow_html=True)
+    if st.button(
+        "보고서\n보고서 페이지에서 분석 문서를 생성하고 내려받을 수 있습니다.",
+        key="home_link_report",
+        use_container_width=True,
+    ):
+        st.switch_page("pages/4_Report.py")
 
 section("운영 팁", "✨")
 st.markdown(

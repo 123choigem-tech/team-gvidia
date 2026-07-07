@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import zipfile
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -28,6 +27,28 @@ def _load_crawler_articles(keyword: str, limit: int) -> list[dict]:
     return _live_crawl(keyword, limit)
 
 
+def _load_local_articles(limit: int) -> list[dict]:
+    from utils.region_extractor import load_disaster_events
+
+    df = load_disaster_events().copy()
+    if "date" in df.columns:
+        df = df.sort_values("date", ascending=False)
+    df = df.head(limit)
+    records: list[dict] = []
+    for _, row in df.iterrows():
+        records.append(
+            {
+                "title": str(row.get("title", "")),
+                "body": str(row.get("title", "")),
+                "keyword": str(row.get("keyword", "")),
+                "location": str(row.get("location", "")),
+                "published": str(row.get("date", "")),
+                "url": str(row.get("url", "")),
+            }
+        )
+    return records
+
+
 def _build_download_bundle(report_result: dict | None, context: dict) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -36,6 +57,7 @@ def _build_download_bundle(report_result: dict | None, context: dict) -> bytes:
             f"- keyword: {context['keyword']}",
             f"- article_limit: {context['article_limit']}",
             f"- threshold: {context['threshold']}",
+            f"- crawl_source: {context.get('source', 'unknown')}",
             f"- news_rows: {context.get('news_rows', 0)}",
             f"- located_regions: {context.get('located_regions', 0)}",
             f"- saved_sst_regions: {context.get('saved_regions', 0)}",
@@ -64,18 +86,19 @@ def _build_download_bundle(report_result: dict | None, context: dict) -> bytes:
 
 hero(
     "파이프라인 실행",
-    "뉴스 크롤링 → 관심지역 추출 → SST 수집 → 보고서 생성까지 한 번에 실행하는 페이지입니다.",
+    "뉴스 크롤링 → 관심지역 추출 → SST 수집 → 경보 판단 → 보고서 생성까지 한 번에 수행합니다.",
 )
 
-section("실행 제어", "⚙️")
+section("실행 설정", "⚙️")
 with st.container():
     left, right = st.columns([1.15, 0.85])
     with left:
         st.markdown('<div class="ocean-card">', unsafe_allow_html=True)
         st.markdown("#### 실행 범위")
+        st.caption("프로토타입에서는 SST 수집을 상위 5개 지역만 수행합니다.")
         keyword = st.selectbox(
             "관심 키워드",
-            options=["고수온", "고수온 양식장", "고수온 적조"],
+            options=["고수온"],
             index=0,
             disabled=True,
             help="현재 파이프라인은 고수온 키워드로 고정 실행됩니다.",
@@ -84,7 +107,7 @@ with st.container():
             "기사 수",
             options=[10, 12, 14, 16, 18, 20],
             index=5,
-            help="스크롤형 필터 대신 10~20개 범위의 고정 선택만 남겼습니다.",
+            help="10~20개 범위의 고정 선택만 남겼습니다.",
         )
         threshold = st.slider("고수온 기준(°C)", 24.0, 32.0, 28.0, 0.5)
         generate_report = st.checkbox("보고서 자동 생성", value=True)
@@ -99,26 +122,45 @@ with st.container():
 
 st.markdown("---")
 
-if st.button("파이프라인 실행", type="primary", use_container_width=True):
-    status = st.status("파이프라인을 실행하는 중입니다.", expanded=True)
+run_clicked = st.button("파이프라인 실행", type="primary", use_container_width=True)
+
+if run_clicked:
+    progress = st.progress(0, text="실행 준비 중...")
+    log_box = st.empty()
+    result_box = st.empty()
+
+    def _log(message: str, pct: int | None = None):
+        log_box.markdown(f"<div class='ocean-card' style='padding:14px 18px;'><b>{message}</b></div>", unsafe_allow_html=True)
+        if pct is not None:
+            progress.progress(pct, text=message)
+
     try:
-        status.write("[1/4] 뉴스 크롤링 및 관심지역 추출")
-        articles = _load_crawler_articles(keyword, article_limit)
+        _log("[1/5] 뉴스 크롤링 시작", 10)
+        source = "crawl"
+        try:
+            articles = _load_crawler_articles(keyword, article_limit)
+        except Exception as exc:
+            source = "local"
+            st.warning(f"실시간 크롤링 실패, 로컬 데이터로 진행합니다: {exc}")
+            articles = _load_local_articles(article_limit)
+
         from agents.crawler_collection_agent import extract_regions_from_articles
 
+        _log("[2/5] 관심지역 추출", 30)
         regions = extract_regions_from_articles(articles)
         freq_df = pd.DataFrame(regions)
         news_df = pd.DataFrame(articles)
         news_rows = len(news_df)
         located_regions = int(freq_df.dropna(subset=["lat", "lon"]).shape[0]) if not freq_df.empty else 0
+        top_regions_df = freq_df.dropna(subset=["lat", "lon"]).head(5).copy()
 
-        status.write(f"[2/4] SST 수집 ({located_regions}개 지역)")
+        _log(f"[3/5] SST 수집 ({len(top_regions_df)}개 지역)", 55)
         from scripts.collect_sst_by_region import collect_region
 
         saved_regions: list[str] = []
         failed_regions: list[str] = []
-        if not freq_df.empty:
-            for _, row in freq_df.dropna(subset=["lat", "lon"]).iterrows():
+        if not top_regions_df.empty:
+            for _, row in top_regions_df.iterrows():
                 try:
                     collect_region(
                         region=row["location"],
@@ -132,18 +174,21 @@ if st.button("파이프라인 실행", type="primary", use_container_width=True)
                 except Exception as exc:
                     failed_regions.append(f"{row['location']}({exc})")
 
-        status.write("[3/4] 경보 판단")
+        _log("[4/5] 경보 판단", 75)
         alerts = get_active_alerts(threshold=threshold)
 
         report_result = None
         if generate_report:
-            status.write("[4/4] 보고서 생성")
-            report_result = run_report(threshold=threshold, top_n_regions=article_limit)
+            _log("[5/5] 보고서 생성", 90)
+            report_result = run_report(threshold=threshold, top_n_regions=min(article_limit, 5), use_ai=False)
+        else:
+            _log("[5/5] 보고서 생략", 90)
 
         download_context = {
             "keyword": keyword,
             "article_limit": article_limit,
             "threshold": threshold,
+            "source": source,
             "news_df": news_df,
             "freq_df": freq_df,
             "news_rows": news_rows,
@@ -162,7 +207,7 @@ if st.button("파이프라인 실행", type="primary", use_container_width=True)
         if failed_regions:
             st.warning(f"일부 SST 수집 실패: {', '.join(failed_regions[:5])}")
 
-        st.success("파이프라인 실행이 완료되었습니다.")
+        result_box.success("파이프라인 실행이 완료되었습니다.")
         st.download_button(
             "결과 ZIP 다운로드",
             data=bundle,
@@ -172,7 +217,8 @@ if st.button("파이프라인 실행", type="primary", use_container_width=True)
         )
         st.session_state["pipeline_report"] = report_result
         st.session_state["pipeline_download"] = bundle
+        progress.progress(100, text="완료")
     except Exception as exc:
         st.error(f"실행 중 오류가 발생했습니다: {exc}")
     finally:
-        status.update(label="파이프라인 처리 완료", state="complete", expanded=False)
+        progress.empty()
